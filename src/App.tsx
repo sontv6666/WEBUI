@@ -15,14 +15,13 @@ type ReviewItem = {
   updated_at: string;
 };
 
-const TEAM_LIST = Array.from({ length: 27 }, (_, i) => `Team-${i + 1}`);
 const GLOBAL_LIMIT = 100;
 const TEAM_LIMIT = 50;
 
 export default function App() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedTeam, setSelectedTeam] = useState<string>("Team-1");
+  const [selectedTeam, setSelectedTeam] = useState<string>("");
   const [globalFeed, setGlobalFeed] = useState<ReviewItem[]>([]);
   const [teamFeed, setTeamFeed] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,29 +29,21 @@ export default function App() {
 
   useEffect(() => {
     void refreshGlobalFeed(setGlobalFeed, setLoading);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTeam) {
+      setTeamFeed([]);
+      setTeamLoading(false);
+      return;
+    }
     void refreshTeamFeed(selectedTeam, setTeamFeed, setTeamLoading);
-
-    const channel = supabase
-      .channel("timeline-ai-reviews")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "ai_reviews" },
-        () => {
-          void refreshGlobalFeed(setGlobalFeed, setLoading);
-          void refreshTeamFeed(selectedTeam, setTeamFeed, setTeamLoading);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
   }, [selectedTeam]);
 
   const filteredGlobal = useMemo(() => {
     return globalFeed.filter((item) => {
       const byStatus = statusFilter === "all" ? true : item.status === statusFilter;
-      const text = `${item.team_id} ${item.push_summary || ""} ${item.commit_sha || ""}`.toLowerCase();
+      const text = `${item.team_id} ${item.repo_name || ""} ${item.push_summary || ""} ${item.commit_sha || ""}`.toLowerCase();
       const byQuery = text.includes(query.toLowerCase());
       return byStatus && byQuery;
     });
@@ -73,6 +64,43 @@ export default function App() {
     }
     return map;
   }, [globalFeed]);
+
+  const teamOptions = useMemo(() => {
+    return Array.from(latestByTeam.values()).map((item) => ({
+      teamId: item.team_id,
+      repoName: item.repo_name || item.team_id,
+    }));
+  }, [latestByTeam]);
+
+  useEffect(() => {
+    if (teamOptions.length === 0) {
+      setSelectedTeam("");
+      return;
+    }
+    if (!selectedTeam || !teamOptions.some((x) => x.teamId === selectedTeam)) {
+      setSelectedTeam(teamOptions[0].teamId);
+    }
+  }, [teamOptions, selectedTeam]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("timeline-ai-reviews")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "ai_reviews" },
+        () => {
+          void refreshGlobalFeed(setGlobalFeed, setLoading);
+          if (selectedTeam) {
+            void refreshTeamFeed(selectedTeam, setTeamFeed, setTeamLoading);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedTeam]);
 
   return (
     <div className="page">
@@ -136,15 +164,18 @@ export default function App() {
                       value={selectedTeam}
                       onChange={(e) => setSelectedTeam(e.target.value)}
                     >
-                      {TEAM_LIST.map((team) => (
-                        <option key={team} value={team}>
-                          {team}
+                      {teamOptions.map((team) => (
+                        <option key={team.teamId} value={team.teamId}>
+                          {team.teamId}
                         </option>
                       ))}
                     </select>
                   </div>
                   {teamLoading && <p className="state">Loading team timeline...</p>}
-                  {!teamLoading && teamFeed.length === 0 && (
+                  {!selectedTeam && !teamLoading && (
+                    <p className="state">Chưa có dữ liệu team từ Supabase.</p>
+                  )}
+                  {selectedTeam && !teamLoading && teamFeed.length === 0 && (
                     <p className="state">Team này chưa có review events.</p>
                   )}
                   {!teamLoading &&
@@ -162,22 +193,25 @@ export default function App() {
             <section className="panel">
               <h2>Danh sach doi thi</h2>
               <div className="teams-overview">
-                {TEAM_LIST.map((team) => {
-                  const item = latestByTeam.get(team);
+                {teamOptions.map((team) => {
+                  const teamId = team.teamId;
+                  const item = latestByTeam.get(teamId);
                   return (
-                    <article key={team} className="team-overview-card">
+                    <article key={teamId} className="team-overview-card">
                       <div className="line">
-                        <strong>{team}</strong>
+                        <strong>{teamId}</strong>
                         <StatusBadge status={item?.status || "no_data"} />
                       </div>
                       <p>{item?.push_summary || "Chưa có dữ liệu push/review."}</p>
                       <div className="meta">
+                        <span>Repo: {item?.repo_name || team.repoName}</span>
                         <span>Commit: {shortSha(item?.commit_sha || null)}</span>
                         <span>{item ? toAbsoluteTime(item.updated_at) : "N/A"}</span>
                       </div>
                     </article>
                   );
                 })}
+                {teamOptions.length === 0 && <p className="state">No teams available yet.</p>}
               </div>
 
               <div className="teams-table-wrap">
@@ -186,20 +220,23 @@ export default function App() {
                     <tr>
                       <th>Team</th>
                       <th>Status</th>
+                      <th>Repo</th>
                       <th>Commit</th>
                       <th>Summary</th>
                       <th>Updated</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {TEAM_LIST.map((team) => {
-                      const item = latestByTeam.get(team);
+                    {teamOptions.map((team) => {
+                      const teamId = team.teamId;
+                      const item = latestByTeam.get(teamId);
                       return (
-                        <tr key={`table-${team}`}>
-                          <td>{team}</td>
+                        <tr key={`table-${teamId}`}>
+                          <td>{teamId}</td>
                           <td>
                             <StatusBadge status={item?.status || "no_data"} />
                           </td>
+                          <td>{item?.repo_name || team.repoName}</td>
                           <td>
                             <code>{shortSha(item?.commit_sha || null)}</code>
                           </td>
@@ -208,6 +245,11 @@ export default function App() {
                         </tr>
                       );
                     })}
+                    {teamOptions.length === 0 && (
+                      <tr>
+                        <td colSpan={6}>No team records in Supabase yet.</td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -227,6 +269,7 @@ function TimelineItem({ item, showDetails = false }: { item: ReviewItem; showDet
         <StatusBadge status={item.status} />
       </div>
       <div className="meta">
+        <span>Repo: {item.repo_name || "-"}</span>
         <span>{eventLabel(item.status)}</span>
         <span>Commit: {shortSha(item.commit_sha)}</span>
         <span title={toAbsoluteTime(item.updated_at)}>{toRelativeTime(item.updated_at)}</span>
