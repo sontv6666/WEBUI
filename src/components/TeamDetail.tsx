@@ -1,5 +1,5 @@
-import type { CriteriaComments, ReviewItem } from "../types/reviews";
-import { fallbackSummary, shortSha, toAbsoluteTime, toRelativeTime } from "../types/reviews";
+import type { ReviewItem } from "../types/reviews";
+import { extractCriteriaComments, fallbackSummary, shortSha, toAbsoluteTime, toRelativeTime } from "../types/reviews";
 
 export function TeamDetail({
   teamId,
@@ -56,7 +56,7 @@ export function TeamDetail({
 }
 
 function renderCriteriaComments(structuredOutput: Record<string, unknown> | null) {
-  const criteria = (structuredOutput?.criteria_comments || null) as CriteriaComments | null;
+  const criteria = extractCriteriaComments(structuredOutput);
   if (!criteria) return null;
 
   const entries: Array<{ key: keyof CriteriaComments; label: string }> = [

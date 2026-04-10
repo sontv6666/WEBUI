@@ -21,6 +21,13 @@ export type CriteriaComments = {
   R1_05?: string;
 };
 
+export function extractCriteriaComments(structuredOutput: Record<string, unknown> | null): CriteriaComments | null {
+  if (!structuredOutput) return null;
+  const value = structuredOutput.criteria_comments;
+  if (!value || typeof value !== "object") return null;
+  return value as CriteriaComments;
+}
+
 export type TeamLatestReview = {
   team_id: string;
   repo_name: string | null;

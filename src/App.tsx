@@ -107,7 +107,7 @@ export default function App() {
           element={
             <section className="panel">
               <h2>Danh sach doi thi</h2>
-              <TeamsTable rows={latestTeams} loading={loadingLatest} />
+              <TeamsTable rows={latestTeams} commits={globalFeed} loading={loadingLatest || loadingGlobal} />
             </section>
           }
         />

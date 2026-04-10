@@ -46,6 +46,16 @@ body {
   margin-bottom: 14px;
 }
 
+.sticky-filters {
+  position: sticky;
+  top: 8px;
+  z-index: 4;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #eff6ff);
+}
+
 .controls input,
 .controls select {
   width: 280px;
@@ -227,6 +237,60 @@ body {
   overflow: auto;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
+}
+
+.team-groups {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.team-group-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.team-group-card h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.team-group-card.status-done {
+  border-left: 6px solid #22c55e;
+}
+
+.team-group-card.status-error {
+  border-left: 6px solid #ef4444;
+}
+
+.team-group-card.status-llm_started {
+  border-left: 6px solid #f59e0b;
+}
+
+.team-summary {
+  margin: 8px 0 10px;
+  color: #334155;
+}
+
+.team-commits-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.team-commits-list {
+  margin-top: 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.commit-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
 }
 
 .teams-table {

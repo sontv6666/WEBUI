@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { ReviewItem, TeamLatestReview } from "../types/reviews";
 
-const GLOBAL_LIMIT = 100;
+const GLOBAL_LIMIT = 1000;
 const TEAM_LIMIT = 50;
 
 export function useReviewsData() {
@@ -95,7 +95,9 @@ export function useReviewsData() {
       .on("postgres_changes", { event: "*", schema: "public", table: "ai_reviews" }, (payload) => {
         void refreshGlobal();
         void refreshLatest();
-        const changedTeam = (payload.new as { team_id?: string } | null)?.team_id;
+        const changedTeam =
+          (payload.new as { team_id?: string } | null)?.team_id ||
+          (payload.old as { team_id?: string } | null)?.team_id;
         if (selectedTeam && changedTeam && changedTeam === selectedTeam) {
           void refreshTeamHistory(selectedTeam);
         }
@@ -104,6 +106,21 @@ export function useReviewsData() {
 
     return () => {
       void supabase.removeChannel(channel);
+    };
+  }, [refreshGlobal, refreshLatest, refreshTeamHistory, selectedTeam]);
+
+  // Fallback polling in case realtime socket is temporarily disrupted.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refreshGlobal();
+      void refreshLatest();
+      if (selectedTeam) {
+        void refreshTeamHistory(selectedTeam);
+      }
+    }, 60000);
+
+    return () => {
+      window.clearInterval(timer);
     };
   }, [refreshGlobal, refreshLatest, refreshTeamHistory, selectedTeam]);
 
