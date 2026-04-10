@@ -59,7 +59,7 @@ function renderCriteriaComments(structuredOutput: Record<string, unknown> | null
   const criteria = extractCriteriaComments(structuredOutput);
   if (!criteria) return null;
 
-  const entries: Array<{ key: keyof CriteriaComments; label: string }> = [
+  const entries: Array<{ key: "R1_01" | "R1_02" | "R1_03" | "R1_04" | "R1_05"; label: string }> = [
     { key: "R1_01", label: "R1_01 - Domain fit" },
     { key: "R1_02", label: "R1_02 - Data pipeline" },
     { key: "R1_03", label: "R1_03 - Retrieval" },
