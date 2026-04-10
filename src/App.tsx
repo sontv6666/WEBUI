@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, Route, Routes } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { TeamDetail } from "./components/TeamDetail";
 import { TeamsTable } from "./components/TeamsTable";
 import { useReviewsData } from "./hooks/useReviewsData";
@@ -19,6 +19,12 @@ export default function App() {
     loadingTeam,
     stats,
   } = useReviewsData();
+  const navigate = useNavigate();
+
+  const openTeamDetail = (teamId: string) => {
+    setSelectedTeam(teamId);
+    navigate(`/teams/${encodeURIComponent(teamId)}`);
+  };
 
   const filteredGlobal = useMemo(() => {
     return globalFeed.filter((item) => {
@@ -87,7 +93,11 @@ export default function App() {
                   )}
                   {!loadingGlobal &&
                     filteredGlobal.map((item) => (
-                      <TimelineItem key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} item={item} />
+                      <TimelineItem
+                        key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`}
+                        item={item}
+                        onOpenTeam={openTeamDetail}
+                      />
                     ))}
                 </section>
 
@@ -95,6 +105,7 @@ export default function App() {
                   teamId={selectedTeam}
                   teams={teamOptions}
                   onTeamChange={setSelectedTeam}
+                  onOpenTeam={openTeamDetail}
                   rows={teamFeed}
                   loading={loadingTeam}
                 />
@@ -107,8 +118,26 @@ export default function App() {
           element={
             <section className="panel">
               <h2>Danh sach doi thi</h2>
-              <TeamsTable rows={latestTeams} commits={globalFeed} loading={loadingLatest || loadingGlobal} />
+              <TeamsTable
+                rows={latestTeams}
+                commits={globalFeed}
+                onOpenTeam={openTeamDetail}
+                loading={loadingLatest || loadingGlobal}
+              />
             </section>
+          }
+        />
+        <Route
+          path="/teams/:teamId"
+          element={
+            <TeamCommitPage
+              selectedTeam={selectedTeam}
+              setSelectedTeam={setSelectedTeam}
+              teamFeed={teamFeed}
+              teamOptions={teamOptions}
+              loadingTeam={loadingTeam}
+              onOpenTeam={openTeamDetail}
+            />
           }
         />
       </Routes>
@@ -116,9 +145,29 @@ export default function App() {
   );
 }
 
-function TimelineItem({ item, showDetails = false }: { item: ReviewItem; showDetails?: boolean }) {
+function TimelineItem({
+  item,
+  showDetails = false,
+  onOpenTeam,
+}: {
+  item: ReviewItem;
+  showDetails?: boolean;
+  onOpenTeam?: (teamId: string) => void;
+}) {
   return (
-    <article className="timeline-item">
+    <article
+      className={`timeline-item ${onOpenTeam ? "clickable" : ""}`}
+      onClick={onOpenTeam ? () => onOpenTeam(item.team_id) : undefined}
+      role={onOpenTeam ? "button" : undefined}
+      tabIndex={onOpenTeam ? 0 : undefined}
+      onKeyDown={
+        onOpenTeam
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") onOpenTeam(item.team_id);
+            }
+          : undefined
+      }
+    >
       <div className="line">
         <strong>{item.team_id}</strong>
         <StatusBadge status={item.status} />
@@ -152,4 +201,45 @@ function KpiCard({ label, value }: { label: string; value: string | number }) {
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${status}`}>{status}</span>;
+}
+
+function TeamCommitPage({
+  selectedTeam,
+  setSelectedTeam,
+  teamFeed,
+  teamOptions,
+  loadingTeam,
+  onOpenTeam,
+}: {
+  selectedTeam: string;
+  setSelectedTeam: (teamId: string) => void;
+  teamFeed: ReviewItem[];
+  teamOptions: Array<{ teamId: string; repoName: string }>;
+  loadingTeam: boolean;
+  onOpenTeam: (teamId: string) => void;
+}) {
+  const { teamId } = useParams();
+
+  useEffect(() => {
+    if (teamId && teamId !== selectedTeam) {
+      setSelectedTeam(teamId);
+    }
+  }, [teamId, selectedTeam, setSelectedTeam]);
+
+  return (
+    <section className="panel">
+      <div className="line">
+        <h2>Chi tiet danh gia theo team</h2>
+        <Link to="/teams">Quay lai Dashboard Teams</Link>
+      </div>
+      <TeamDetail
+        teamId={selectedTeam}
+        teams={teamOptions}
+        onTeamChange={setSelectedTeam}
+        onOpenTeam={onOpenTeam}
+        rows={teamFeed}
+        loading={loadingTeam}
+      />
+    </section>
+  );
 }

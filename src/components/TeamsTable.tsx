@@ -5,10 +5,12 @@ import { extractCriteriaComments, shortSha, toAbsoluteTime, toRelativeTime } fro
 export function TeamsTable({
   rows: latestRows,
   commits,
+  onOpenTeam,
   loading,
 }: {
   rows: TeamLatestReview[];
   commits: ReviewItem[];
+  onOpenTeam?: (teamId: string) => void;
   loading: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -55,7 +57,11 @@ export function TeamsTable({
         {loading && <p className="state">Loading teams overview...</p>}
         {!loading &&
           grouped.map(({ team, commits }) => (
-            <article key={`group-${team.team_id}`} className={`team-group-card status-${team.status}`}>
+            <article
+              key={`group-${team.team_id}`}
+              className={`team-group-card status-${team.status} ${onOpenTeam ? "clickable" : ""}`}
+              onClick={onOpenTeam ? () => onOpenTeam(team.team_id) : undefined}
+            >
               <div className="line">
                 <h3>{team.team_id}</h3>
                 <span className={`badge ${team.status}`}>{team.status}</span>

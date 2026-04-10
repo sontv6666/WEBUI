@@ -5,12 +5,14 @@ export function TeamDetail({
   teamId,
   teams,
   onTeamChange,
+  onOpenTeam,
   rows,
   loading,
 }: {
   teamId: string;
   teams: Array<{ teamId: string }>;
   onTeamChange: (teamId: string) => void;
+  onOpenTeam?: (teamId: string) => void;
   rows: ReviewItem[];
   loading: boolean;
 }) {
@@ -31,7 +33,20 @@ export function TeamDetail({
       {teamId && !loading && rows.length === 0 && <p className="state">Team nay chua co review events.</p>}
       {!loading &&
         rows.map((item) => (
-          <article key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} className="timeline-item">
+          <article
+            key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`}
+            className={`timeline-item ${onOpenTeam ? "clickable" : ""}`}
+            onClick={onOpenTeam ? () => onOpenTeam(item.team_id) : undefined}
+            role={onOpenTeam ? "button" : undefined}
+            tabIndex={onOpenTeam ? 0 : undefined}
+            onKeyDown={
+              onOpenTeam
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") onOpenTeam(item.team_id);
+                  }
+                : undefined
+            }
+          >
             <div className="line">
               <strong>{item.team_id}</strong>
               <span className={`badge ${item.status}`}>{item.status}</span>
