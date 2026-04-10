@@ -42,6 +42,10 @@ body {
   margin-bottom: 12px;
 }
 
+.teams-controls {
+  margin-bottom: 14px;
+}
+
 .controls input,
 .controls select {
   width: 280px;
@@ -160,6 +164,45 @@ body {
 
 .details {
   margin-top: 8px;
+}
+
+.json-details {
+  margin-top: 8px;
+}
+
+.criteria-box {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.criteria-box strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.criteria-box p {
+  margin: 6px 0;
+}
+
+.json-details summary {
+  cursor: pointer;
+  color: #334155;
+  font-size: 13px;
+}
+
+.json-details pre {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #0f172a;
+  color: #e2e8f0;
+  max-height: 220px;
+  overflow: auto;
+  font-size: 12px;
 }
 
 .state {

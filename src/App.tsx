@@ -1,44 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
-import { supabase } from "./lib/supabase";
-
-type ReviewItem = {
-  team_id: string;
-  repo_name: string | null;
-  commit_sha: string | null;
-  status: "llm_started" | "done" | "error" | string;
-  push_summary: string | null;
-  rag_level: string | null;
-  structured_output: Record<string, unknown> | null;
-  input_code_length: number | null;
-  created_at: string;
-  updated_at: string;
-};
-
-const GLOBAL_LIMIT = 100;
-const TEAM_LIMIT = 50;
+import { TeamDetail } from "./components/TeamDetail";
+import { TeamsTable } from "./components/TeamsTable";
+import { useReviewsData } from "./hooks/useReviewsData";
+import { eventLabel, fallbackSummary, shortSha, toAbsoluteTime, toRelativeTime, type ReviewItem } from "./types/reviews";
 
 export default function App() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedTeam, setSelectedTeam] = useState<string>("");
-  const [globalFeed, setGlobalFeed] = useState<ReviewItem[]>([]);
-  const [teamFeed, setTeamFeed] = useState<ReviewItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [teamLoading, setTeamLoading] = useState(true);
-
-  useEffect(() => {
-    void refreshGlobalFeed(setGlobalFeed, setLoading);
-  }, []);
-
-  useEffect(() => {
-    if (!selectedTeam) {
-      setTeamFeed([]);
-      setTeamLoading(false);
-      return;
-    }
-    void refreshTeamFeed(selectedTeam, setTeamFeed, setTeamLoading);
-  }, [selectedTeam]);
+  const {
+    globalFeed,
+    latestTeams,
+    teamFeed,
+    selectedTeam,
+    setSelectedTeam,
+    loadingGlobal,
+    loadingLatest,
+    loadingTeam,
+    stats,
+  } = useReviewsData();
 
   const filteredGlobal = useMemo(() => {
     return globalFeed.filter((item) => {
@@ -49,58 +29,12 @@ export default function App() {
     });
   }, [globalFeed, statusFilter, query]);
 
-  const stats = useMemo(() => {
-    const done = globalFeed.filter((x) => x.status === "done").length;
-    const error = globalFeed.filter((x) => x.status === "error").length;
-    const running = globalFeed.filter((x) => x.status === "llm_started").length;
-    const latest = globalFeed[0]?.updated_at || null;
-    return { done, error, running, latest };
-  }, [globalFeed]);
-
-  const latestByTeam = useMemo(() => {
-    const map = new Map<string, ReviewItem>();
-    for (const item of globalFeed) {
-      if (!map.has(item.team_id)) map.set(item.team_id, item);
-    }
-    return map;
-  }, [globalFeed]);
-
   const teamOptions = useMemo(() => {
-    return Array.from(latestByTeam.values()).map((item) => ({
+    return latestTeams.map((item) => ({
       teamId: item.team_id,
       repoName: item.repo_name || item.team_id,
     }));
-  }, [latestByTeam]);
-
-  useEffect(() => {
-    if (teamOptions.length === 0) {
-      setSelectedTeam("");
-      return;
-    }
-    if (!selectedTeam || !teamOptions.some((x) => x.teamId === selectedTeam)) {
-      setSelectedTeam(teamOptions[0].teamId);
-    }
-  }, [teamOptions, selectedTeam]);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel("timeline-ai-reviews")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "ai_reviews" },
-        () => {
-          void refreshGlobalFeed(setGlobalFeed, setLoading);
-          if (selectedTeam) {
-            void refreshTeamFeed(selectedTeam, setTeamFeed, setTeamLoading);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [selectedTeam]);
+  }, [latestTeams]);
 
   return (
     <div className="page">
@@ -147,42 +81,23 @@ export default function App() {
               <main className="layout">
                 <section className="panel timeline">
                   <h2>Global Timeline</h2>
-                  {loading && <p className="state">Loading global feed...</p>}
-                  {!loading && filteredGlobal.length === 0 && (
+                  {loadingGlobal && <p className="state">Loading global feed...</p>}
+                  {!loadingGlobal && filteredGlobal.length === 0 && (
                     <p className="state">No events found for current filters.</p>
                   )}
-                  {!loading &&
+                  {!loadingGlobal &&
                     filteredGlobal.map((item) => (
                       <TimelineItem key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} item={item} />
                     ))}
                 </section>
 
-                <section className="panel team-panel">
-                  <div className="team-header">
-                    <h2>Team Timeline</h2>
-                    <select
-                      value={selectedTeam}
-                      onChange={(e) => setSelectedTeam(e.target.value)}
-                    >
-                      {teamOptions.map((team) => (
-                        <option key={team.teamId} value={team.teamId}>
-                          {team.teamId}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {teamLoading && <p className="state">Loading team timeline...</p>}
-                  {!selectedTeam && !teamLoading && (
-                    <p className="state">Chưa có dữ liệu team từ Supabase.</p>
-                  )}
-                  {selectedTeam && !teamLoading && teamFeed.length === 0 && (
-                    <p className="state">Team này chưa có review events.</p>
-                  )}
-                  {!teamLoading &&
-                    teamFeed.map((item) => (
-                      <TimelineItem key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} item={item} showDetails />
-                    ))}
-                </section>
+                <TeamDetail
+                  teamId={selectedTeam}
+                  teams={teamOptions}
+                  onTeamChange={setSelectedTeam}
+                  rows={teamFeed}
+                  loading={loadingTeam}
+                />
               </main>
             </>
           }
@@ -192,67 +107,7 @@ export default function App() {
           element={
             <section className="panel">
               <h2>Danh sach doi thi</h2>
-              <div className="teams-overview">
-                {teamOptions.map((team) => {
-                  const teamId = team.teamId;
-                  const item = latestByTeam.get(teamId);
-                  return (
-                    <article key={teamId} className="team-overview-card">
-                      <div className="line">
-                        <strong>{teamId}</strong>
-                        <StatusBadge status={item?.status || "no_data"} />
-                      </div>
-                      <p>{item?.push_summary || "Chưa có dữ liệu push/review."}</p>
-                      <div className="meta">
-                        <span>Repo: {item?.repo_name || team.repoName}</span>
-                        <span>Commit: {shortSha(item?.commit_sha || null)}</span>
-                        <span>{item ? toAbsoluteTime(item.updated_at) : "N/A"}</span>
-                      </div>
-                    </article>
-                  );
-                })}
-                {teamOptions.length === 0 && <p className="state">No teams available yet.</p>}
-              </div>
-
-              <div className="teams-table-wrap">
-                <table className="teams-table">
-                  <thead>
-                    <tr>
-                      <th>Team</th>
-                      <th>Status</th>
-                      <th>Repo</th>
-                      <th>Commit</th>
-                      <th>Summary</th>
-                      <th>Updated</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teamOptions.map((team) => {
-                      const teamId = team.teamId;
-                      const item = latestByTeam.get(teamId);
-                      return (
-                        <tr key={`table-${teamId}`}>
-                          <td>{teamId}</td>
-                          <td>
-                            <StatusBadge status={item?.status || "no_data"} />
-                          </td>
-                          <td>{item?.repo_name || team.repoName}</td>
-                          <td>
-                            <code>{shortSha(item?.commit_sha || null)}</code>
-                          </td>
-                          <td>{item?.push_summary || "Chua co du lieu"}</td>
-                          <td>{item ? toAbsoluteTime(item.updated_at) : "N/A"}</td>
-                        </tr>
-                      );
-                    })}
-                    {teamOptions.length === 0 && (
-                      <tr>
-                        <td colSpan={6}>No team records in Supabase yet.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <TeamsTable rows={latestTeams} loading={loadingLatest} />
             </section>
           }
         />
@@ -297,79 +152,4 @@ function KpiCard({ label, value }: { label: string; value: string | number }) {
 
 function StatusBadge({ status }: { status: string }) {
   return <span className={`badge ${status}`}>{status}</span>;
-}
-
-function shortSha(sha: string | null) {
-  if (!sha) return "unknown";
-  return sha.slice(0, 8);
-}
-
-function eventLabel(status: string) {
-  if (status === "done") return "AI review completed";
-  if (status === "llm_started") return "AI review started";
-  if (status === "error") return "AI review failed";
-  return "Review event";
-}
-
-function fallbackSummary(status: string) {
-  if (status === "done") return "AI completed and stored the review output.";
-  if (status === "llm_started") return "New push received. AI started analyzing this commit.";
-  if (status === "error") return "AI encountered an issue while processing this commit.";
-  return "No summary provided.";
-}
-
-function toAbsoluteTime(value: string) {
-  return new Date(value).toLocaleString();
-}
-
-function toRelativeTime(value: string) {
-  const now = Date.now();
-  const then = new Date(value).getTime();
-  const diffSec = Math.max(0, Math.floor((now - then) / 1000));
-  if (diffSec < 60) return `${diffSec}s ago`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-  return `${Math.floor(diffSec / 86400)}d ago`;
-}
-
-async function refreshGlobalFeed(
-  setGlobalFeed: (rows: ReviewItem[]) => void,
-  setLoading: (value: boolean) => void
-) {
-  setLoading(true);
-  const { data, error } = await supabase
-    .from("ai_reviews")
-    .select("*")
-    .order("updated_at", { ascending: false })
-    .limit(GLOBAL_LIMIT);
-  if (error) {
-    console.error("Failed to load global timeline", error);
-    setGlobalFeed([]);
-    setLoading(false);
-    return;
-  }
-  setGlobalFeed((data as ReviewItem[]) || []);
-  setLoading(false);
-}
-
-async function refreshTeamFeed(
-  teamId: string,
-  setTeamFeed: (rows: ReviewItem[]) => void,
-  setTeamLoading: (value: boolean) => void
-) {
-  setTeamLoading(true);
-  const { data, error } = await supabase
-    .from("ai_reviews")
-    .select("*")
-    .eq("team_id", teamId)
-    .order("updated_at", { ascending: false })
-    .limit(TEAM_LIMIT);
-  if (error) {
-    console.error("Failed to load team timeline", error);
-    setTeamFeed([]);
-    setTeamLoading(false);
-    return;
-  }
-  setTeamFeed((data as ReviewItem[]) || []);
-  setTeamLoading(false);
 }
