@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, Route, Routes } from "react-router-dom";
 import { supabase } from "./lib/supabase";
 
 type ReviewItem = {
@@ -65,6 +66,14 @@ export default function App() {
     return { done, error, running, latest };
   }, [globalFeed]);
 
+  const latestByTeam = useMemo(() => {
+    const map = new Map<string, ReviewItem>();
+    for (const item of globalFeed) {
+      if (!map.has(item.team_id)) map.set(item.team_id, item);
+    }
+    return map;
+  }, [globalFeed]);
+
   return (
     <div className="page">
       <header className="topbar">
@@ -72,68 +81,108 @@ export default function App() {
           <h1>Hackathon Review Timeline</h1>
           <p className="sub">Realtime feed: team nào vừa push, AI xử lý ra sao</p>
         </div>
-        <div className="controls">
-          <input
-            placeholder="Search team / commit / summary..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="all">All status</option>
-            <option value="llm_started">AI started</option>
-            <option value="done">Done</option>
-            <option value="error">Error</option>
-          </select>
-        </div>
+        <nav className="nav">
+          <Link to="/">Timeline</Link>
+          <Link to="/teams">All Teams</Link>
+        </nav>
       </header>
 
-      <section className="kpi-grid">
-        <KpiCard label="Done" value={stats.done} />
-        <KpiCard label="Errors" value={stats.error} />
-        <KpiCard label="In Progress" value={stats.running} />
-        <KpiCard
-          label="Last Update"
-          value={stats.latest ? `${toRelativeTime(stats.latest)} (${toAbsoluteTime(stats.latest)})` : "N/A"}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <>
+              <section className="kpi-grid">
+                <KpiCard label="Done" value={stats.done} />
+                <KpiCard label="Errors" value={stats.error} />
+                <KpiCard label="In Progress" value={stats.running} />
+                <KpiCard
+                  label="Last Update"
+                  value={stats.latest ? `${toRelativeTime(stats.latest)} (${toAbsoluteTime(stats.latest)})` : "N/A"}
+                />
+              </section>
+
+              <div className="controls">
+                <input
+                  placeholder="Search team / commit / summary..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                  <option value="all">All status</option>
+                  <option value="llm_started">AI started</option>
+                  <option value="done">Done</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+
+              <main className="layout">
+                <section className="panel timeline">
+                  <h2>Global Timeline</h2>
+                  {loading && <p className="state">Loading global feed...</p>}
+                  {!loading && filteredGlobal.length === 0 && (
+                    <p className="state">No events found for current filters.</p>
+                  )}
+                  {!loading &&
+                    filteredGlobal.map((item) => (
+                      <TimelineItem key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} item={item} />
+                    ))}
+                </section>
+
+                <section className="panel team-panel">
+                  <div className="team-header">
+                    <h2>Team Timeline</h2>
+                    <select
+                      value={selectedTeam}
+                      onChange={(e) => setSelectedTeam(e.target.value)}
+                    >
+                      {TEAM_LIST.map((team) => (
+                        <option key={team} value={team}>
+                          {team}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {teamLoading && <p className="state">Loading team timeline...</p>}
+                  {!teamLoading && teamFeed.length === 0 && (
+                    <p className="state">Team này chưa có review events.</p>
+                  )}
+                  {!teamLoading &&
+                    teamFeed.map((item) => (
+                      <TimelineItem key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} item={item} showDetails />
+                    ))}
+                </section>
+              </main>
+            </>
+          }
         />
-      </section>
-
-      <main className="layout">
-        <section className="panel timeline">
-          <h2>Global Timeline</h2>
-          {loading && <p className="state">Loading global feed...</p>}
-          {!loading && filteredGlobal.length === 0 && (
-            <p className="state">No events found for current filters.</p>
-          )}
-          {!loading &&
-            filteredGlobal.map((item) => (
-              <TimelineItem key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} item={item} />
-            ))}
-        </section>
-
-        <section className="panel team-panel">
-          <div className="team-header">
-            <h2>Team Timeline</h2>
-            <select
-              value={selectedTeam}
-              onChange={(e) => setSelectedTeam(e.target.value)}
-            >
-              {TEAM_LIST.map((team) => (
-                <option key={team} value={team}>
-                  {team}
-                </option>
-              ))}
-            </select>
-          </div>
-          {teamLoading && <p className="state">Loading team timeline...</p>}
-          {!teamLoading && teamFeed.length === 0 && (
-            <p className="state">Team này chưa có review events.</p>
-          )}
-          {!teamLoading &&
-            teamFeed.map((item) => (
-              <TimelineItem key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`} item={item} showDetails />
-            ))}
-        </section>
-      </main>
+        <Route
+          path="/teams"
+          element={
+            <section className="panel">
+              <h2>All Teams Overview</h2>
+              <div className="teams-overview">
+                {TEAM_LIST.map((team) => {
+                  const item = latestByTeam.get(team);
+                  return (
+                    <article key={team} className="team-overview-card">
+                      <div className="line">
+                        <strong>{team}</strong>
+                        <StatusBadge status={item?.status || "no_data"} />
+                      </div>
+                      <p>{item?.push_summary || "Chưa có dữ liệu push/review."}</p>
+                      <div className="meta">
+                        <span>Commit: {shortSha(item?.commit_sha || null)}</span>
+                        <span>{item ? toAbsoluteTime(item.updated_at) : "N/A"}</span>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          }
+        />
+      </Routes>
     </div>
   );
 }

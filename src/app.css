@@ -39,6 +39,7 @@ body {
 .controls {
   display: flex;
   gap: 10px;
+  margin-bottom: 12px;
 }
 
 .controls input,
@@ -92,6 +93,20 @@ body {
 
 .kpi-card strong {
   font-size: 16px;
+}
+
+.nav {
+  display: flex;
+  gap: 8px;
+}
+
+.nav a {
+  text-decoration: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 12px;
+  color: #0f172a;
+  background: #fff;
 }
 
 .line {
@@ -151,6 +166,19 @@ body {
   color: #64748b;
 }
 
+.teams-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.team-overview-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
 .badge {
   font-size: 11px;
   padding: 4px 8px;
@@ -174,6 +202,11 @@ body {
   color: #92400e;
 }
 
+.badge.no_data {
+  background: #e2e8f0;
+  color: #334155;
+}
+
 @media (max-width: 1100px) {
   .topbar {
     flex-direction: column;
@@ -193,6 +226,10 @@ body {
   }
 
   .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .teams-overview {
     grid-template-columns: 1fr;
   }
 }
