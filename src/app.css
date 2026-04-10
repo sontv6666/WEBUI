@@ -170,6 +170,7 @@ body {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  margin-bottom: 16px;
 }
 
 .team-overview-card {
@@ -177,6 +178,32 @@ body {
   border-radius: 10px;
   padding: 10px;
   background: #f8fafc;
+}
+
+.teams-table-wrap {
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.teams-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: #fff;
+}
+
+.teams-table th,
+.teams-table td {
+  padding: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.teams-table th {
+  background: #f8fafc;
+  font-weight: 600;
 }
 
 .badge {

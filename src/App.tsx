@@ -78,12 +78,12 @@ export default function App() {
     <div className="page">
       <header className="topbar">
         <div>
-          <h1>Hackathon Review Timeline</h1>
-          <p className="sub">Realtime feed: team nào vừa push, AI xử lý ra sao</p>
+          <h1>Hackathon Dashboard</h1>
+          <p className="sub">Bảng theo dõi các đội tham gia và trạng thái review</p>
         </div>
         <nav className="nav">
+          <Link to="/teams">Dashboard Teams</Link>
           <Link to="/">Timeline</Link>
-          <Link to="/teams">All Teams</Link>
         </nav>
       </header>
 
@@ -160,7 +160,7 @@ export default function App() {
           path="/teams"
           element={
             <section className="panel">
-              <h2>All Teams Overview</h2>
+              <h2>Danh sach doi thi</h2>
               <div className="teams-overview">
                 {TEAM_LIST.map((team) => {
                   const item = latestByTeam.get(team);
@@ -178,6 +178,38 @@ export default function App() {
                     </article>
                   );
                 })}
+              </div>
+
+              <div className="teams-table-wrap">
+                <table className="teams-table">
+                  <thead>
+                    <tr>
+                      <th>Team</th>
+                      <th>Status</th>
+                      <th>Commit</th>
+                      <th>Summary</th>
+                      <th>Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TEAM_LIST.map((team) => {
+                      const item = latestByTeam.get(team);
+                      return (
+                        <tr key={`table-${team}`}>
+                          <td>{team}</td>
+                          <td>
+                            <StatusBadge status={item?.status || "no_data"} />
+                          </td>
+                          <td>
+                            <code>{shortSha(item?.commit_sha || null)}</code>
+                          </td>
+                          <td>{item?.push_summary || "Chua co du lieu"}</td>
+                          <td>{item ? toAbsoluteTime(item.updated_at) : "N/A"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </section>
           }
