@@ -11,8 +11,7 @@ import {
   fallbackSummary,
   formatBatchReviewDisplayValue,
   formatBatchedShaPreview,
-  formatStatusLabel,
-  shouldShowReviewStatusBadge,
+  reviewKindOf,
   shortSha,
   toAbsoluteTime,
   toRelativeTime,
@@ -42,13 +41,39 @@ export default function App() {
     navigate(`/teams/${encodeURIComponent(teamId)}`);
   };
 
+  const perPushCountByTeam = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const item of globalFeed) {
+      if (reviewKindOf(item) !== "per_push") continue;
+      const id = item.team_id;
+      m.set(id, (m.get(id) ?? 0) + 1);
+    }
+    return m;
+  }, [globalFeed]);
+
+  const timelineKpis = useMemo(() => {
+    const teamIds = new Set(globalFeed.map((r) => r.team_id));
+    let perPushTotal = 0;
+    for (const item of globalFeed) {
+      if (reviewKindOf(item) === "per_push") perPushTotal += 1;
+    }
+    return { uniqueTeams: teamIds.size, perPushTotal };
+  }, [globalFeed]);
+
   const filteredGlobal = useMemo(() => {
     const q = query.toLowerCase();
-    return globalFeed.filter((item) => {
+    const filtered = globalFeed.filter((item) => {
       const text = `${item.team_id} ${item.repo_name || ""} ${item.push_summary || ""} ${item.commit_sha || ""}`.toLowerCase();
       return text.includes(q);
     });
-  }, [globalFeed, query]);
+    const pushRank = (teamId: string) => perPushCountByTeam.get(teamId) ?? 0;
+    return [...filtered].sort((a, b) => {
+      const ra = pushRank(a.team_id);
+      const rb = pushRank(b.team_id);
+      if (rb !== ra) return rb - ra;
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    });
+  }, [globalFeed, query, perPushCountByTeam]);
 
   const timelinePageCount = useMemo(
     () => computePageCount(filteredGlobal.length, TIMELINE_PAGE_SIZE),
@@ -110,19 +135,23 @@ export default function App() {
           path="/"
           element={
             <>
-              <section className="kpi-grid">
-                <KpiCard label="Lỗi" value={stats.error} />
-                <KpiCard label="Đang chạy" value={stats.running} />
+              <section className="kpi-grid kpi-grid--timeline">
+                <KpiCard label="Số đội (trong phạm vi tải)" value={timelineKpis.uniqueTeams} />
                 <KpiCard
-                  label="Cập nhật gần nhất"
+                  label="Push per-push (đã tải)"
+                  value={timelineKpis.perPushTotal}
+                  hint={`Đếm bản ghi per_push trong tối đa ${GLOBAL_FEED_QUERY_LIMIT} dòng mới nhất.`}
+                />
+                <KpiCard
+                  label="Cập nhật gần nhất (đội)"
                   value={stats.latest ? `${toRelativeTime(stats.latest)} · ${toAbsoluteTime(stats.latest)}` : "—"}
                 />
                 <KpiCard
-                  label="Bản ghi commit (đang tải)"
+                  label="Bản ghi đã tải"
                   value={globalFeed.length}
                   hint={
                     globalFeed.length >= GLOBAL_FEED_QUERY_LIMIT
-                      ? `Tối đa ${GLOBAL_FEED_QUERY_LIMIT} bản ghi mỗi lần tải — có thể còn nhiều hơn trong DB.`
+                      ? `Tối đa ${GLOBAL_FEED_QUERY_LIMIT} bản ghi mỗi lần — có thể còn nhiều hơn trong DB.`
                       : `Tối đa ${GLOBAL_FEED_QUERY_LIMIT} bản ghi mỗi lần tải.`
                   }
                 />
@@ -138,10 +167,12 @@ export default function App() {
               </div>
 
               <main className="layout">
-                <section className="panel timeline page-section">
-                  <div className="page-section-head">
-                    <h2 className="panel-title page-section-title">Lịch sử review (toàn cục)</h2>
-                    <p className="page-section-desc">Nhấp một dòng để mở chi tiết đội.</p>
+                <section className="panel timeline page-section timeline-page-section">
+                  <div className="page-section-head page-section-head--compact">
+                    <h2 className="panel-title page-section-title">Lịch sử review</h2>
+                    <p className="page-section-desc page-section-desc--inline">
+                      Ưu tiên đội nhiều push · nhấp dòng để mở chi tiết.
+                    </p>
                   </div>
                   {loadingGlobal && (
                     <div className="timeline-shell">
@@ -163,6 +194,7 @@ export default function App() {
                         pageSize={TIMELINE_PAGE_SIZE}
                         loadedCap={GLOBAL_FEED_QUERY_LIMIT}
                         atLoadedCap={globalFeed.length >= GLOBAL_FEED_QUERY_LIMIT}
+                        sortHint="Đội nhiều push xếp trước, sau đó mới nhất trước."
                       />
                       <PaginationBar
                         className="timeline-pagination timeline-pagination--top"
@@ -299,6 +331,7 @@ function TimelineLayoutMeta({
   pageSize,
   loadedCap,
   atLoadedCap,
+  sortHint,
 }: {
   totalPushes: number;
   uniqueTeams: number;
@@ -307,20 +340,22 @@ function TimelineLayoutMeta({
   pageSize: number;
   loadedCap: number;
   atLoadedCap: boolean;
+  sortHint: string;
 }) {
   return (
     <div className="timeline-layout-meta" role="status" aria-label="Thống kê timeline">
       <p className="timeline-layout-meta__compact">
-        Sau tìm kiếm: <strong>{totalPushes}</strong> push · <strong>{uniqueTeams}</strong> đội · trang này:{" "}
-        <strong>{itemsOnPage}</strong> push · <strong>{uniqueTeamsOnPage}</strong> đội · tối đa{" "}
-        <strong>{pageSize}</strong> push/trang
+        <strong>{totalPushes}</strong> dòng · <strong>{uniqueTeams}</strong> đội
         {atLoadedCap ? (
           <>
             {" "}
-            · <span className="timeline-layout-meta__warn">đang giới hạn {loadedCap} bản ghi tải từ DB</span>
+            · <span className="timeline-layout-meta__warn">tối đa {loadedCap} bản ghi</span>
           </>
         ) : null}
+        <span className="timeline-layout-meta__sep"> · </span>
+        Trang: <strong>{itemsOnPage}</strong>/<strong>{pageSize}</strong> · <strong>{uniqueTeamsOnPage}</strong> đội
       </p>
+      <p className="timeline-layout-meta__sort">{sortHint}</p>
     </div>
   );
 }
@@ -329,7 +364,7 @@ function TimelineSkeleton() {
   return (
     <div className="timeline-skeleton" aria-busy="true">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="timeline-item" style={{ borderLeftColor: "#e2e8f0" }}>
+        <div key={i} className="timeline-item timeline-item--feed" style={{ borderLeftColor: "#e2e8f0" }}>
           <div className="line">
             <Skeleton className="skeleton-line" style={{ width: "40%" }} />
             <Skeleton className="skeleton-line" style={{ width: 72, height: 24 }} />
@@ -349,14 +384,14 @@ function TimelineItem({ item, onOpenTeam }: { item: ReviewItem; onOpenTeam?: (te
   const chipItems: Array<{ label: string; value: string }> = [
     { label: "Repo", value: item.repo_name || "—" },
     { label: "Commit", value: shortSha(item.commit_sha) },
-    { label: "Cập nhật", value: `${toRelativeTime(item.updated_at)} · ${toAbsoluteTime(item.updated_at)}` },
+    { label: "Cập nhật", value: toRelativeTime(item.updated_at) },
   ];
   if (batchValue) chipItems.push({ label: "Đợt review", value: batchValue });
   if (batchShaPreview) chipItems.push({ label: "SHA trong đợt", value: batchShaPreview });
 
   return (
     <article
-      className={`timeline-item ${onOpenTeam ? "clickable" : ""}`}
+      className={`timeline-item timeline-item--feed ${onOpenTeam ? "clickable" : ""}`}
       data-status={item.status}
       onClick={onOpenTeam ? () => onOpenTeam(item.team_id) : undefined}
       role={onOpenTeam ? "button" : undefined}
@@ -372,7 +407,6 @@ function TimelineItem({ item, onOpenTeam }: { item: ReviewItem; onOpenTeam?: (te
     >
       <div className="line">
         <strong>{item.team_id}</strong>
-        {shouldShowReviewStatusBadge(item.status) ? <StatusBadge status={item.status} /> : null}
       </div>
       <MetaChips items={chipItems} />
       <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
@@ -394,10 +428,6 @@ function KpiCard({ label, value, hint }: { label: string; value: string | number
       {hint ? <p className="kpi-card__hint">{hint}</p> : null}
     </div>
   );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${status}`}>{formatStatusLabel(status)}</span>;
 }
 
 function TeamCommitPage({

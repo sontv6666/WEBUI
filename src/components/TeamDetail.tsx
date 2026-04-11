@@ -236,11 +236,6 @@ export function TeamDetail({
             <h3 className="subsection-title page-section-title">Đánh giá toàn hệ thống</h3>
             <span className="badge badge--kind">{reviewKindLabelVi("team_aggregate")}</span>
           </div>
-          <p className="summary-text">
-            {aggregateRow.push_summary ||
-              extractOverallPicture(aggregateRow.structured_output)?.push_summary ||
-              fallbackSummary(aggregateRow.status)}
-          </p>
           <p className="team-aggregate-note">
             Nội dung lấy từ bản ghi <strong>tổng hợp đội</strong> mới nhất trong DB — khi có commit/pipeline mới, chạy lại workflow aggregate
             để cập nhật (realtime và polling 60s đã bật cho bảng này).
