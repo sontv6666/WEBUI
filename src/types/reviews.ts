@@ -26,6 +26,12 @@ export function reviewKindOf(item: ReviewItem): ReviewKind {
   return item.review_kind === "team_aggregate" ? "team_aggregate" : "per_push";
 }
 
+/** Nhãn tiếng Việt cho UI (không hiển thị chuỗi nội bộ `per_push` / `team_aggregate`). */
+export function reviewKindLabelVi(kind: ReviewKind): string {
+  if (kind === "team_aggregate") return "Tổng hợp đội";
+  return "Theo push";
+}
+
 /** Mọi hàng trong DB reset hiện tại đều là bản ghi review theo commit. */
 export function isPerPushReview(item: ReviewItem): boolean {
   return item.review_kind !== "team_aggregate";
@@ -195,25 +201,48 @@ export function shortSha(sha: string | null) {
   return sha.slice(0, 8);
 }
 
+/** DD/MM/YYYY, HH:mm:ss (giờ địa phương). */
 export function toAbsoluteTime(value: string) {
-  return new Date(value).toLocaleString();
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const h = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const s = String(d.getSeconds()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy}, ${h}:${min}:${s}`;
 }
 
 export function toRelativeTime(value: string) {
   const now = Date.now();
   const then = new Date(value).getTime();
+  if (Number.isNaN(then)) return "—";
   const diffSec = Math.max(0, Math.floor((now - then) / 1000));
-  if (diffSec < 60) return `${diffSec}s ago`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
-  return `${Math.floor(diffSec / 86400)}d ago`;
+  if (diffSec < 10) return "Vừa xong";
+  if (diffSec < 60) return `${diffSec} giây trước`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)} phút trước`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)} giờ trước`;
+  return `${Math.floor(diffSec / 86400)} ngày trước`;
+}
+
+/** Nhãn trạng thái review cho chip/badge (tiếng Việt). */
+export function formatStatusLabel(status: string) {
+  const s = String(status).toLowerCase().trim();
+  if (s === "done") return "Hoàn thành";
+  if (s === "llm_started") return "Đang xử lý";
+  if (s === "error") return "Lỗi";
+  if (s === "no_data") return "Chưa có dữ liệu";
+  return status;
+}
+
+/** Ẩn badge/chip trạng thái khi đã xong (gọn UI; vẫn giữ llm_started / error). */
+export function shouldShowReviewStatusBadge(status: string) {
+  return String(status).toLowerCase().trim() !== "done";
 }
 
 export function eventLabel(status: string) {
-  if (status === "done") return "Review hoàn thành";
-  if (status === "llm_started") return "AI đang xử lý";
-  if (status === "error") return "Review lỗi";
-  return "Sự kiện review";
+  return formatStatusLabel(status);
 }
 
 export function fallbackSummary(status: string) {

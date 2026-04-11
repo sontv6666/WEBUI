@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReviewItem, TeamLatestReview } from "../types/reviews";
-import { extractCriteriaComments, extractOverallPicture, shortSha, toAbsoluteTime, toRelativeTime } from "../types/reviews";
+import {
+  extractCriteriaComments,
+  extractOverallPicture,
+  formatStatusLabel,
+  shouldShowReviewStatusBadge,
+  shortSha,
+  toAbsoluteTime,
+  toRelativeTime,
+} from "../types/reviews";
 import { computePageCount, PaginationBar, slicePage } from "./Pagination";
 import { MetaChips, ProjectToolsPanels, ProsePre, SectionLabel } from "./Presentation";
 
@@ -92,7 +100,9 @@ export function TeamsTable({
               >
                 <div className="line">
                   <h3>{team.team_id}</h3>
-                  <span className={`badge ${team.status}`}>{team.status}</span>
+                  {shouldShowReviewStatusBadge(team.status) ? (
+                    <span className={`badge ${team.status}`}>{formatStatusLabel(team.status)}</span>
+                  ) : null}
                 </div>
                 <MetaChips
                   items={[
@@ -125,7 +135,9 @@ export function TeamsTable({
                         <div key={`${commit.team_id}-${commit.commit_sha}-${commit.updated_at}`} className="commit-card">
                           <div className="line">
                             <strong>{shortSha(commit.commit_sha)}</strong>
-                            <span className={`badge ${commit.status}`}>{commit.status}</span>
+                            {shouldShowReviewStatusBadge(commit.status) ? (
+                              <span className={`badge ${commit.status}`}>{formatStatusLabel(commit.status)}</span>
+                            ) : null}
                           </div>
                           <MetaChips
                             items={[

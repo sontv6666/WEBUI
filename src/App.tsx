@@ -6,8 +6,9 @@ import { TeamsTable } from "./components/TeamsTable";
 import { MetaChips, Skeleton } from "./components/Presentation";
 import { useReviewsData } from "./hooks/useReviewsData";
 import {
-  eventLabel,
   fallbackSummary,
+  formatStatusLabel,
+  shouldShowReviewStatusBadge,
   shortSha,
   toAbsoluteTime,
   toRelativeTime,
@@ -304,12 +305,11 @@ function TimelineItem({ item, onOpenTeam }: { item: ReviewItem; onOpenTeam?: (te
     >
       <div className="line">
         <strong>{item.team_id}</strong>
-        <StatusBadge status={item.status} />
+        {shouldShowReviewStatusBadge(item.status) ? <StatusBadge status={item.status} /> : null}
       </div>
       <MetaChips
         items={[
           { label: "Repo", value: item.repo_name || "—" },
-          { label: "Sự kiện", value: eventLabel(item.status) },
           { label: "Commit", value: shortSha(item.commit_sha) },
           { label: "Cập nhật", value: `${toRelativeTime(item.updated_at)} · ${toAbsoluteTime(item.updated_at)}` },
         ]}
@@ -335,7 +335,7 @@ function KpiCard({ label, value }: { label: string; value: string | number }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${status}`}>{status}</span>;
+  return <span className={`badge ${status}`}>{formatStatusLabel(status)}</span>;
 }
 
 function TeamCommitPage({

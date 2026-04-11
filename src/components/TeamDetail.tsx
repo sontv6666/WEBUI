@@ -10,6 +10,8 @@ import {
   extractSuggestedQuestionsForTeam,
   extractSuggestedTestCases,
   fallbackSummary,
+  formatStatusLabel,
+  shouldShowReviewStatusBadge,
   shortSha,
   toAbsoluteTime,
   toRelativeTime,
@@ -143,7 +145,9 @@ export function TeamDetail({
             >
               <div className="line">
                 <strong>Commit {shortSha(item.commit_sha)}</strong>
-                <span className={`badge ${item.status}`}>{item.status}</span>
+                {shouldShowReviewStatusBadge(item.status) ? (
+                  <span className={`badge ${item.status}`}>{formatStatusLabel(item.status)}</span>
+                ) : null}
               </div>
               <MetaChips
                 items={[
@@ -259,10 +263,7 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
           ) : null}
           {hasAssessment && assessment ? (
             <div className="llm-section-chunk">
-              <SectionLabel icon="◎">Đánh giá (ưu / khuyết / cải thiện · ngữ cảnh · cấu trúc · hoàn thiện · bảo mật)</SectionLabel>
-              <p className="llm-block-hint">
-                Bảy khối: Ưu điểm, Khuyết điểm, Điểm cần cải thiện (ưu tiên hành động), Ngữ cảnh, Cấu trúc source, Độ hoàn thiện, Bảo mật — do AI trích từ diff/review.
-              </p>
+              <SectionLabel icon="◎">Đánh giá</SectionLabel>
               {ASSESSMENT_LABELS.map(({ key, label }) => {
                 const text = (assessment[key] as string | undefined)?.trim();
                 if (!text) return null;
@@ -293,9 +294,7 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
                     </span>
                     Test case gợi ý
                   </h4>
-                  <p className="review-panel__subtitle">
-                    Kịch bản kiểm thử — AI theo stack đội; khung bổ sung khi chưa có đủ từ AI.
-                  </p>
+                  <p className="review-panel__subtitle">Theo stack đội; có thể bổ sung khung khi AI chưa trả đủ.</p>
                 </div>
                 {copyTestBundle.trim() ? (
                   <CopyTextButton text={copyTestBundle}>Sao chép tất cả</CopyTextButton>
@@ -349,7 +348,7 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
                     </span>
                     Câu hỏi gợi ý cho đội
                   </h4>
-                  <p className="review-panel__subtitle">Demo / chấm / phỏng vấn — tách riêng khỏi test case.</p>
+                  <p className="review-panel__subtitle">Gợi ý khi demo hoặc chấm.</p>
                 </div>
                 <CopyTextButton text={questions.join("\n\n")}>Sao chép tất cả</CopyTextButton>
               </header>
