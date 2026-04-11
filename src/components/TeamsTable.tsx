@@ -18,7 +18,6 @@ export function TeamsTable({
   loading: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("all");
   const [teamsPage, setTeamsPage] = useState(1);
 
   const grouped = useMemo(() => {
@@ -32,15 +31,14 @@ export function TeamsTable({
     const q = query.trim().toLowerCase();
     return latestRows
       .filter((item) => {
-        const statusPass = status === "all" ? true : item.status === status;
         const text = `${item.team_id} ${item.repo_name || ""} ${item.push_summary || ""} ${item.commit_sha || ""}`.toLowerCase();
-        return statusPass && text.includes(q);
+        return text.includes(q);
       })
       .map((team) => ({
         team,
         commits: commitsByTeam.get(team.team_id) || [],
       }));
-  }, [query, latestRows, status, commits]);
+  }, [query, latestRows, commits]);
 
   const teamsPageCount = useMemo(() => computePageCount(grouped.length, TEAMS_PAGE_SIZE), [grouped.length]);
 
@@ -48,7 +46,7 @@ export function TeamsTable({
 
   useEffect(() => {
     setTeamsPage(1);
-  }, [query, status]);
+  }, [query]);
 
   useEffect(() => {
     if (teamsPage > teamsPageCount) setTeamsPage(teamsPageCount);
@@ -63,16 +61,10 @@ export function TeamsTable({
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Tìm kiếm đội"
         />
-        <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Lọc trạng thái">
-          <option value="all">Mọi trạng thái</option>
-          <option value="llm_started">AI đang xử lý</option>
-          <option value="done">Hoàn thành</option>
-          <option value="error">Lỗi</option>
-        </select>
       </div>
 
       <p className="teams-table-intro page-section-desc">
-        Lọc phía trên · tối đa <strong>{TEAMS_PAGE_SIZE}</strong> đội/trang. <strong>Một cú nhấp</strong> vào thẻ (khu vực trắng / tóm tắt) để mở trang chi tiết; mở khối &quot;Các lần push&quot; bên trong <em>không</em> thoát trang.
+        Ô tìm kiếm phía trên · tối đa <strong>{TEAMS_PAGE_SIZE}</strong> đội/trang. <strong>Một cú nhấp</strong> vào thẻ (khu vực trắng / tóm tắt) để mở trang chi tiết; mở khối &quot;Các lần push&quot; bên trong <em>không</em> thoát trang.
       </p>
 
       <div className="team-groups">
@@ -159,7 +151,7 @@ export function TeamsTable({
               </article>
             );
           })}
-        {!loading && grouped.length === 0 && <p className="state">Không có đội phù hợp bộ lọc.</p>}
+        {!loading && grouped.length === 0 && <p className="state">Không có đội phù hợp tìm kiếm.</p>}
       </div>
 
       {!loading && grouped.length > 0 && (

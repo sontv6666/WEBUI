@@ -19,7 +19,6 @@ const TIMELINE_PAGE_SIZE = 12;
 
 export default function App() {
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [timelinePage, setTimelinePage] = useState(1);
   const {
     globalFeed,
@@ -42,13 +41,12 @@ export default function App() {
   };
 
   const filteredGlobal = useMemo(() => {
+    const q = query.toLowerCase();
     return globalFeed.filter((item) => {
-      const byStatus = statusFilter === "all" ? true : item.status === statusFilter;
       const text = `${item.team_id} ${item.repo_name || ""} ${item.push_summary || ""} ${item.commit_sha || ""}`.toLowerCase();
-      const byQuery = text.includes(query.toLowerCase());
-      return byStatus && byQuery;
+      return text.includes(q);
     });
-  }, [globalFeed, statusFilter, query]);
+  }, [globalFeed, query]);
 
   const timelinePageCount = useMemo(
     () => computePageCount(filteredGlobal.length, TIMELINE_PAGE_SIZE),
@@ -62,7 +60,7 @@ export default function App() {
 
   useEffect(() => {
     setTimelinePage(1);
-  }, [query, statusFilter]);
+  }, [query]);
 
   useEffect(() => {
     if (timelinePage > timelinePageCount) setTimelinePage(timelinePageCount);
@@ -134,12 +132,6 @@ export default function App() {
                   onChange={(e) => setQuery(e.target.value)}
                   aria-label="Tìm kiếm"
                 />
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Lọc trạng thái">
-                  <option value="all">Mọi trạng thái</option>
-                  <option value="llm_started">AI đang xử lý</option>
-                  <option value="done">Hoàn thành</option>
-                  <option value="error">Lỗi</option>
-                </select>
               </div>
 
               <main className="layout">
@@ -161,7 +153,7 @@ export default function App() {
                     </div>
                   )}
                   {!loadingGlobal && filteredGlobal.length === 0 && (
-                    <p className="state">Không có sự kiện phù hợp bộ lọc.</p>
+                    <p className="state">Không có sự kiện phù hợp tìm kiếm.</p>
                   )}
                   {!loadingGlobal && filteredGlobal.length > 0 && (
                     <div className="timeline-shell">
@@ -286,7 +278,7 @@ function TimelineLayoutMeta({
       </div>
       <ul className="timeline-layout-meta__stats">
         <li>
-          Sau lọc: <strong>{totalPushes}</strong> push · <strong>{uniqueTeams}</strong> đội (không trùng)
+          Sau tìm kiếm: <strong>{totalPushes}</strong> push · <strong>{uniqueTeams}</strong> đội (không trùng)
         </li>
         <li>
           Trang hiện tại: <strong>{itemsOnPage}</strong> push · <strong>{uniqueTeamsOnPage}</strong> đội
@@ -389,12 +381,18 @@ function TeamCommitPage({
   onOpenTeam: (teamId: string) => void;
 }) {
   const { teamId } = useParams();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (teamId && teamId !== selectedTeam) {
       setSelectedTeam(teamId);
     }
   }, [teamId, selectedTeam, setSelectedTeam]);
+
+  const handleTeamChange = (newTeamId: string) => {
+    setSelectedTeam(newTeamId);
+    navigate(`/teams/${encodeURIComponent(newTeamId)}`);
+  };
 
   return (
     <section className="panel page-panel page-panel--detail">
@@ -416,7 +414,7 @@ function TeamCommitPage({
       <TeamDetail
         teamId={selectedTeam}
         teams={teamOptions}
-        onTeamChange={setSelectedTeam}
+        onTeamChange={handleTeamChange}
         onOpenTeam={onOpenTeam}
         rows={teamFeed}
         aggregateReview={teamAggregate}
