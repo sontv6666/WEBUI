@@ -20,6 +20,8 @@ type PaginationBarProps = {
   ariaLabel: string;
   /** Nội dung bổ sung bên trái (vd. chọn kích thước trang) */
   startSlot?: ReactNode;
+  /** Gắn thêm class lên khối bọc (vd. vị trí trên/dưới timeline) */
+  className?: string;
 };
 
 export function PaginationBar({
@@ -30,14 +32,17 @@ export function PaginationBar({
   onPageChange,
   ariaLabel,
   startSlot,
+  className,
 }: PaginationBarProps) {
   if (totalItems === 0) return null;
 
   const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, totalItems);
 
+  const wrapClass = ["pagination-wrap", className].filter(Boolean).join(" ");
+
   return (
-    <div className="pagination-wrap">
+    <div className={wrapClass}>
       {startSlot ? <div className="pagination-slot-start">{startSlot}</div> : null}
       <p className="pagination-range" aria-live="polite">
         <span className="pagination-range__nums">

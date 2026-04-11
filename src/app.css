@@ -279,18 +279,109 @@ body {
 }
 
 /* —— Timeline —— */
-.timeline {
+.panel.timeline.page-section {
+  display: flex;
+  flex-direction: column;
   max-height: min(74vh, 900px);
-  overflow: auto;
+  min-height: 0;
+}
+
+.timeline-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.timeline-scroll {
+  flex: 1;
+  min-height: 140px;
+  overflow-y: auto;
   padding-right: 4px;
 }
 
-.timeline::-webkit-scrollbar {
+.timeline-scroll::-webkit-scrollbar {
   width: 8px;
 }
-.timeline::-webkit-scrollbar-thumb {
+.timeline-scroll::-webkit-scrollbar-thumb {
   background: var(--border-strong);
   border-radius: 999px;
+}
+
+.timeline-layout-meta {
+  flex-shrink: 0;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: linear-gradient(135deg, #fafbff 0%, var(--bg-subtle) 100%);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.timeline-layout-meta__layout {
+  margin: 0 0 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--border);
+}
+
+.timeline-layout-meta__layout-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-soft);
+  margin-bottom: 6px;
+}
+
+.timeline-layout-meta__layout-text {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.timeline-layout-meta__layout-text strong {
+  color: var(--text);
+}
+
+@media (min-width: 1101px) {
+  .timeline-layout-meta__layout-text--narrow {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .timeline-layout-meta__layout-text--wide {
+    display: none;
+  }
+}
+
+.timeline-layout-meta__stats {
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.timeline-layout-meta__stats li {
+  margin: 0;
+}
+
+.timeline-layout-meta__stats strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-pagination--top {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.timeline-pagination--bottom {
+  margin-top: 8px;
+  margin-bottom: 0;
 }
 
 .timeline-item {

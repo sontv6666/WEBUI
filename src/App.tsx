@@ -75,6 +75,17 @@ export default function App() {
     }));
   }, [latestTeams]);
 
+  const timelineFilterStats = useMemo(() => {
+    const teamFiltered = new Set(filteredGlobal.map((r) => r.team_id));
+    const teamPage = new Set(paginatedTimeline.map((r) => r.team_id));
+    return {
+      totalPushes: filteredGlobal.length,
+      uniqueTeams: teamFiltered.size,
+      itemsOnPage: paginatedTimeline.length,
+      uniqueTeamsOnPage: teamPage.size,
+    };
+  }, [filteredGlobal, paginatedTimeline]);
+
   return (
     <div className="page">
       <header className="topbar">
@@ -138,33 +149,59 @@ export default function App() {
                     <p className="page-section-desc">
                       Mỗi dòng là kết quả pipeline cho <strong>một push</strong> (bản ghi per-push). <strong>Nhấp một lần</strong>{" "}
                       vào dòng để mở <strong>trang chi tiết đội</strong> (cột bên phải trên Timeline, hoặc{" "}
-                      <code>/teams/…</code>). Lọc và phân trang bên dưới.
+                      <code>/teams/…</code>). Thanh bên dưới tiêu đề cho biết bố cục, số push/đội và phân trang; chỉ phần danh sách
+                      là vùng cuộn.
                     </p>
                   </div>
-                  {loadingGlobal && <TimelineSkeleton />}
+                  {loadingGlobal && (
+                    <div className="timeline-shell">
+                      <div className="timeline-scroll">
+                        <TimelineSkeleton />
+                      </div>
+                    </div>
+                  )}
                   {!loadingGlobal && filteredGlobal.length === 0 && (
                     <p className="state">Không có sự kiện phù hợp bộ lọc.</p>
                   )}
                   {!loadingGlobal && filteredGlobal.length > 0 && (
-                    <>
-                      <div className="timeline-page-items">
-                        {paginatedTimeline.map((item) => (
-                          <TimelineItem
-                            key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`}
-                            item={item}
-                            onOpenTeam={openTeamDetail}
-                          />
-                        ))}
-                      </div>
+                    <div className="timeline-shell">
+                      <TimelineLayoutMeta
+                        totalPushes={timelineFilterStats.totalPushes}
+                        uniqueTeams={timelineFilterStats.uniqueTeams}
+                        itemsOnPage={timelineFilterStats.itemsOnPage}
+                        uniqueTeamsOnPage={timelineFilterStats.uniqueTeamsOnPage}
+                        pageSize={TIMELINE_PAGE_SIZE}
+                      />
                       <PaginationBar
+                        className="timeline-pagination timeline-pagination--top"
                         page={timelinePage}
                         pageCount={timelinePageCount}
                         totalItems={filteredGlobal.length}
                         pageSize={TIMELINE_PAGE_SIZE}
                         onPageChange={setTimelinePage}
-                        ariaLabel="Phân trang lịch sử review"
+                        ariaLabel="Phân trang lịch sử review (trên)"
                       />
-                    </>
+                      <div className="timeline-scroll">
+                        <div className="timeline-page-items">
+                          {paginatedTimeline.map((item) => (
+                            <TimelineItem
+                              key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`}
+                              item={item}
+                              onOpenTeam={openTeamDetail}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <PaginationBar
+                        className="timeline-pagination timeline-pagination--bottom"
+                        page={timelinePage}
+                        pageCount={timelinePageCount}
+                        totalItems={filteredGlobal.length}
+                        pageSize={TIMELINE_PAGE_SIZE}
+                        onPageChange={setTimelinePage}
+                        ariaLabel="Phân trang lịch sử review (dưới)"
+                      />
+                    </div>
                   )}
                 </section>
 
@@ -219,6 +256,45 @@ export default function App() {
           }
         />
       </Routes>
+    </div>
+  );
+}
+
+function TimelineLayoutMeta({
+  totalPushes,
+  uniqueTeams,
+  itemsOnPage,
+  uniqueTeamsOnPage,
+  pageSize,
+}: {
+  totalPushes: number;
+  uniqueTeams: number;
+  itemsOnPage: number;
+  uniqueTeamsOnPage: number;
+  pageSize: number;
+}) {
+  return (
+    <div className="timeline-layout-meta" role="status" aria-label="Bố cục trang và thống kê timeline">
+      <div className="timeline-layout-meta__layout">
+        <span className="timeline-layout-meta__layout-label">Panel / cột</span>
+        <p className="timeline-layout-meta__layout-text timeline-layout-meta__layout-text--wide">
+          Đang xem dạng <strong>hai cột</strong> (màn rộng ≥ 1100px): cột trái là Timeline, cột phải là chi tiết đội.
+        </p>
+        <p className="timeline-layout-meta__layout-text timeline-layout-meta__layout-text--narrow">
+          Đang xem dạng <strong>một cột</strong> (màn hẹp): Timeline trên, khối chi tiết đội xếp bên dưới.
+        </p>
+      </div>
+      <ul className="timeline-layout-meta__stats">
+        <li>
+          Sau lọc: <strong>{totalPushes}</strong> push · <strong>{uniqueTeams}</strong> đội (không trùng)
+        </li>
+        <li>
+          Trang hiện tại: <strong>{itemsOnPage}</strong> push · <strong>{uniqueTeamsOnPage}</strong> đội
+        </li>
+        <li>
+          Kích thước trang: tối đa <strong>{pageSize}</strong> push — dùng phân trang trên/dưới danh sách
+        </li>
+      </ul>
     </div>
   );
 }
