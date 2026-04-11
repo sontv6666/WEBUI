@@ -3,7 +3,15 @@ import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { TeamDetail } from "./components/TeamDetail";
 import { TeamsTable } from "./components/TeamsTable";
 import { useReviewsData } from "./hooks/useReviewsData";
-import { eventLabel, fallbackSummary, shortSha, toAbsoluteTime, toRelativeTime, type ReviewItem } from "./types/reviews";
+import {
+  eventLabel,
+  fallbackSummary,
+  isPerPushReview,
+  shortSha,
+  toAbsoluteTime,
+  toRelativeTime,
+  type ReviewItem,
+} from "./types/reviews";
 
 export default function App() {
   const [query, setQuery] = useState("");
@@ -12,11 +20,13 @@ export default function App() {
     globalFeed,
     latestTeams,
     teamFeed,
+    teamAggregate,
     selectedTeam,
     setSelectedTeam,
     loadingGlobal,
     loadingLatest,
     loadingTeam,
+    loadingAggregate,
     stats,
   } = useReviewsData();
   const navigate = useNavigate();
@@ -107,7 +117,9 @@ export default function App() {
                   onTeamChange={setSelectedTeam}
                   onOpenTeam={openTeamDetail}
                   rows={teamFeed}
+                  aggregateReview={teamAggregate}
                   loading={loadingTeam}
+                  loadingAggregate={loadingAggregate}
                 />
               </main>
             </>
@@ -120,7 +132,7 @@ export default function App() {
               <h2>Danh sach doi thi</h2>
               <TeamsTable
                 rows={latestTeams}
-                commits={globalFeed}
+                commits={globalFeed.filter(isPerPushReview)}
                 onOpenTeam={openTeamDetail}
                 loading={loadingLatest || loadingGlobal}
               />
@@ -134,8 +146,10 @@ export default function App() {
               selectedTeam={selectedTeam}
               setSelectedTeam={setSelectedTeam}
               teamFeed={teamFeed}
+              teamAggregate={teamAggregate}
               teamOptions={teamOptions}
               loadingTeam={loadingTeam}
+              loadingAggregate={loadingAggregate}
               onOpenTeam={openTeamDetail}
             />
           }
@@ -207,15 +221,19 @@ function TeamCommitPage({
   selectedTeam,
   setSelectedTeam,
   teamFeed,
+  teamAggregate,
   teamOptions,
   loadingTeam,
+  loadingAggregate,
   onOpenTeam,
 }: {
   selectedTeam: string;
   setSelectedTeam: (teamId: string) => void;
   teamFeed: ReviewItem[];
+  teamAggregate: ReviewItem | null;
   teamOptions: Array<{ teamId: string; repoName: string }>;
   loadingTeam: boolean;
+  loadingAggregate: boolean;
   onOpenTeam: (teamId: string) => void;
 }) {
   const { teamId } = useParams();
@@ -238,7 +256,9 @@ function TeamCommitPage({
         onTeamChange={setSelectedTeam}
         onOpenTeam={onOpenTeam}
         rows={teamFeed}
+        aggregateReview={teamAggregate}
         loading={loadingTeam}
+        loadingAggregate={loadingAggregate}
       />
     </section>
   );

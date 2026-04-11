@@ -1,9 +1,13 @@
 export type ReviewStatus = "llm_started" | "done" | "error" | "no_data" | string;
 
+export type ReviewKind = "per_push" | "team_aggregate";
+
 export type ReviewItem = {
   team_id: string;
   repo_name: string | null;
   commit_sha: string | null;
+  /** Defaults to per_push when missing (older rows). */
+  review_kind?: ReviewKind;
   status: ReviewStatus;
   push_summary: string | null;
   rag_level: string | null;
@@ -12,6 +16,14 @@ export type ReviewItem = {
   created_at: string;
   updated_at: string;
 };
+
+export function reviewKindOf(item: ReviewItem): ReviewKind {
+  return item.review_kind === "team_aggregate" ? "team_aggregate" : "per_push";
+}
+
+export function isPerPushReview(item: ReviewItem): boolean {
+  return reviewKindOf(item) === "per_push";
+}
 
 export type CriteriaComments = {
   R1_01?: string;

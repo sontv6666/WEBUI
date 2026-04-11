@@ -351,6 +351,35 @@ body {
   color: #334155;
 }
 
+.badge.subtle {
+  background: #e0e7ff;
+  color: #3730a3;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.aggregate-panel {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.aggregate-panel h3 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.aggregate-card {
+  border-color: #c7d2fe;
+  background: #fafbff;
+}
+
+.subsection-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: #334155;
+}
+
 @media (max-width: 1100px) {
   .topbar {
     flex-direction: column;
