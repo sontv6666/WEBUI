@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { computePageCount, PaginationBar, slicePage } from "./components/Pagination";
-import { getAggregateNavEntries, TeamDetail } from "./components/TeamDetail";
+import { getTeamDetailNavEntries, TeamDetail, type TeamDetailNavEntry } from "./components/TeamDetail";
 import { AllTeamsGrid } from "./components/AllTeamsGrid";
 import { TeamsTable } from "./components/TeamsTable";
 import { MetaChips, Skeleton } from "./components/Presentation";
@@ -20,6 +20,8 @@ import {
 
 const TIMELINE_PAGE_SIZE = 12;
 
+const TEAM_PICKER_COLS_KEY = "hackathon-team-picker-cols";
+
 export default function App() {
   const [searchInput, setSearchInput] = useState("");
   /** Bộ lọc timeline — áp khi bấm Tìm hoặc Enter */
@@ -37,6 +39,25 @@ export default function App() {
     stats,
   } = useReviewsData();
   const navigate = useNavigate();
+
+  const [teamGridColumns, setTeamGridColumns] = useState<2 | 3 | 5>(() => {
+    try {
+      const v = localStorage.getItem(TEAM_PICKER_COLS_KEY);
+      if (v === "2" || v === "3" || v === "5") return Number(v) as 2 | 3 | 5;
+    } catch {
+      /* ignore */
+    }
+    return 3;
+  });
+
+  const setTeamGridColumnsPersist = (n: 2 | 3 | 5) => {
+    setTeamGridColumns(n);
+    try {
+      localStorage.setItem(TEAM_PICKER_COLS_KEY, String(n));
+    } catch {
+      /* ignore */
+    }
+  };
 
   const openTeamDetail = (teamId: string) => {
     setSelectedTeam(teamId);
@@ -289,26 +310,73 @@ export default function App() {
                     Tất cả đội (lưới) →
                   </Link>
                 </div>
-                <select
-                  value={
-                    teamOptions.some((t) => t.teamId === selectedTeam)
-                      ? selectedTeam
-                      : teamOptions[0]?.teamId ?? ""
-                  }
-                  onChange={(e) => openTeamDetail(e.target.value)}
-                  disabled={!teamOptions.length}
-                  aria-label="Chọn đội để xem commit và chi tiết"
+                <div className="team-picker-toolbar" role="group" aria-label="Chọn đội và mật độ lưới">
+                  <div className="team-picker-density" role="group" aria-label="Số đội mỗi hàng">
+                    <span className="team-picker-density__label">Hàng:</span>
+                    {([2, 3, 5] as const).map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`team-picker-density__btn${teamGridColumns === n ? " team-picker-density__btn--active" : ""}`}
+                        onClick={() => setTeamGridColumnsPersist(n)}
+                        aria-pressed={teamGridColumns === n}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div
+                  className="team-picker-grid"
+                  style={{ "--team-cols": String(teamGridColumns) } as CSSProperties}
                 >
                   {!teamOptions.length ? (
-                    <option value="">Đang tải danh sách đội…</option>
+                    <p className="state team-picker-grid__empty">Đang tải danh sách đội…</p>
                   ) : (
-                    teamOptions.map((team) => (
-                      <option key={team.teamId} value={team.teamId}>
-                        {team.repoName ? `${team.teamId} · ${team.repoName}` : team.teamId}
-                      </option>
-                    ))
+                    teamOptions.map((team) => {
+                      const current = selectedTeam === team.teamId;
+                      return (
+                        <button
+                          key={team.teamId}
+                          type="button"
+                          className={`team-picker-tile${current ? " team-picker-tile--current" : ""}`}
+                          onClick={() => openTeamDetail(team.teamId)}
+                        >
+                          <span className="team-picker-tile__id">{team.teamId}</span>
+                          {team.repoName ? (
+                            <span className="team-picker-tile__repo" title={team.repoName}>
+                              {team.repoName}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })
                   )}
-                </select>
+                </div>
+                <details className="team-picker-quick-select">
+                  <summary>Chọn nhanh (danh sách)</summary>
+                  <select
+                    className="team-picker-quick-select__select"
+                    value={
+                      teamOptions.some((t) => t.teamId === selectedTeam)
+                        ? selectedTeam
+                        : teamOptions[0]?.teamId ?? ""
+                    }
+                    onChange={(e) => openTeamDetail(e.target.value)}
+                    disabled={!teamOptions.length}
+                    aria-label="Chọn đội để xem commit và chi tiết"
+                  >
+                    {!teamOptions.length ? (
+                      <option value="">Đang tải danh sách đội…</option>
+                    ) : (
+                      teamOptions.map((team) => (
+                        <option key={team.teamId} value={team.teamId}>
+                          {team.repoName ? `${team.teamId} · ${team.repoName}` : team.teamId}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </details>
               </div>
               <TeamsTable
                 rows={latestTeams}
@@ -473,12 +541,25 @@ function TeamCommitPage({
     navigate(`/teams/${encodeURIComponent(newTeamId)}`);
   };
 
-  const aggregateNavItems = useMemo(() => getAggregateNavEntries(teamFeed), [teamFeed]);
+  const navEntries = useMemo(() => getTeamDetailNavEntries(teamFeed), [teamFeed]);
+  const navLinkEntries = useMemo(
+    () => navEntries.filter((e): e is Extract<TeamDetailNavEntry, { kind: "link" }> => e.kind === "link"),
+    [navEntries]
+  );
 
   const [tocOpen, setTocOpen] = useState(false);
+  const [desktopSidebar, setDesktopSidebar] = useState(false);
 
   useEffect(() => {
-    if (!tocOpen) return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setDesktopSidebar(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (!tocOpen || desktopSidebar) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setTocOpen(false);
     };
@@ -489,11 +570,14 @@ function TeamCommitPage({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [tocOpen]);
+  }, [tocOpen, desktopSidebar]);
 
-  const scrollToAggregateSection = (id: string) => {
+  const hasNav = navEntries.length > 0;
+  const showMobileDrawer = hasNav && !desktopSidebar;
+
+  const scrollToDetailSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTocOpen(false);
+    if (!desktopSidebar) setTocOpen(false);
   };
 
   return (
@@ -510,20 +594,36 @@ function TeamCommitPage({
       </nav>
       <div className="panel-head panel-head--detail team-detail-panel-head">
         <h2 className="panel-title">Chi tiết đội &amp; hệ thống</h2>
-        {aggregateNavItems.length > 0 ? (
+        {showMobileDrawer ? (
           <button
             type="button"
             className="team-detail-toc-trigger"
             onClick={() => setTocOpen(true)}
             aria-expanded={tocOpen}
-            aria-controls="team-detail-toc-drawer"
+            aria-controls="team-detail-toc-panel"
           >
             Mục lục
           </button>
         ) : null}
       </div>
-      <div className="team-detail-page-layout">
-        {aggregateNavItems.length > 0 && tocOpen ? (
+      {hasNav && desktopSidebar ? (
+        <div className="team-detail-nav-chips" role="navigation" aria-label="Neo nhanh trong trang">
+          <div className="team-detail-nav-chips__scroll">
+            {navLinkEntries.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`team-detail-nav-chip${item.emphasis === "r2-04" ? " team-detail-nav-chip--emphasis" : ""}`}
+                onClick={() => scrollToDetailSection(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <div className={`team-detail-page-layout${hasNav ? " team-detail-page-layout--has-toc" : ""}`}>
+        {showMobileDrawer && tocOpen ? (
           <button
             type="button"
             className="team-detail-toc-backdrop"
@@ -531,12 +631,12 @@ function TeamCommitPage({
             onClick={() => setTocOpen(false)}
           />
         ) : null}
-        {aggregateNavItems.length > 0 ? (
+        {hasNav ? (
           <nav
-            id="team-detail-toc-drawer"
-            className={`team-detail-toc team-detail-toc-drawer${tocOpen ? " team-detail-toc-drawer--open" : ""}`}
-            aria-hidden={!tocOpen}
-            aria-label="Mục lục đánh giá toàn hệ thống"
+            id="team-detail-toc-panel"
+            className={`team-detail-toc${desktopSidebar ? " team-detail-toc--sidebar" : " team-detail-toc-drawer"}${!desktopSidebar && tocOpen ? " team-detail-toc-drawer--open" : ""}`}
+            aria-hidden={!desktopSidebar && !tocOpen}
+            aria-label="Mục lục trang chi tiết đội"
           >
             <div className="team-detail-toc-drawer__head">
               <p className="team-detail-toc__title">Mục lục</p>
@@ -549,18 +649,24 @@ function TeamCommitPage({
                 ×
               </button>
             </div>
-            <ul className="team-detail-toc__list">
-              {aggregateNavItems.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className="team-detail-toc__link"
-                    onClick={() => scrollToAggregateSection(item.id)}
-                  >
-                    {item.label}
-                  </button>
-                </li>
-              ))}
+            <ul className="team-detail-toc__list team-detail-toc__list--structured">
+              {navEntries.map((entry, idx) =>
+                entry.kind === "heading" ? (
+                  <li key={`h-${idx}-${entry.label}`} className="team-detail-toc__heading">
+                    {entry.label}
+                  </li>
+                ) : (
+                  <li key={entry.id}>
+                    <button
+                      type="button"
+                      className={`team-detail-toc__link${entry.emphasis === "r2-04" ? " team-detail-toc__link--emphasis" : ""}`}
+                      onClick={() => scrollToDetailSection(entry.id)}
+                    >
+                      {entry.label}
+                    </button>
+                  </li>
+                )
+              )}
             </ul>
           </nav>
         ) : null}

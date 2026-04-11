@@ -12,6 +12,7 @@ import {
   extractOverallPicture,
   extractPromptRefinement,
   extractRagMaturity,
+  extractSmbScaleAdvisory,
   extractSuggestedQuestionsForTeam,
   extractSuggestedTestCases,
   fallbackSummary,
@@ -28,7 +29,14 @@ import {
 } from "../types/reviews";
 import { computePageCount, PaginationBar, slicePage } from "./Pagination";
 import { IdentityPlaceholder, MetaChips, ProjectToolsPanels, ProsePre, SectionLabel, Skeleton } from "./Presentation";
-import { SmbScaleAdvisoryPanel, TeamAggregateCriteriaSections } from "./RubricAndAdvisoryPanels";
+import {
+  RUBRIC_R1_LABELS,
+  RUBRIC_R2_LABELS,
+  SMB_ADVISORY_ROWS,
+  SmbScaleAdvisoryPanel,
+  TeamAggregateCriteriaSections,
+} from "./RubricAndAdvisoryPanels";
+import { navIdAssessment, navIdCriteria, navIdSmb, TEAM_DETAIL_FALLBACK_IDS } from "../teamDetailNavIds";
 
 const PUSH_LIST_PAGE_SIZE = 5;
 
@@ -95,47 +103,107 @@ function hasAssessmentForNav(structuredOutput: Record<string, unknown> | null): 
   return ASSESSMENT_LABELS.some(({ key }) => Boolean((assessment[key] as string | undefined)?.trim()));
 }
 
-/** Mục lục neo (chỉ mục có nội dung tương ứng trong bản tổng hợp đội). */
-export function getAggregateNavEntries(rows: ReviewItem[]): Array<{ id: string; label: string }> {
+export type TeamDetailNavEntry =
+  | { kind: "heading"; label: string }
+  | { kind: "link"; id: string; label: string; emphasis?: "r2-04" };
+
+/** Mục lục chi tiết: trang (identity, push…) + từng mục trong tổng hợp đội khi có dữ liệu. */
+export function getTeamDetailNavEntries(rows: ReviewItem[]): TeamDetailNavEntry[] {
+  const perPushRows = rows.filter(isPerPushReview);
   const aggregateRow = pickLatestAggregate(rows);
-  if (!aggregateRow) return [];
+  const identity = resolveTeamIdentity(perPushRows, aggregateRow);
+  const hasIdentity = Boolean(identity.project_about || identity.tools_plain_bullets);
+  const latestPerPush = pickLatestPerPush(perPushRows);
+  const items: TeamDetailNavEntry[] = [];
+
+  if (hasIdentity) {
+    items.push({ kind: "link", id: TEAM_DETAIL_FALLBACK_IDS.identity, label: "Hệ thống — mô tả & công cụ" });
+  }
+  if (latestPerPush) {
+    items.push({ kind: "link", id: TEAM_DETAIL_FALLBACK_IDS.latestPush, label: "Đánh giá push mới nhất" });
+  }
+
+  if (!aggregateRow) {
+    if (perPushRows.length > 0) {
+      items.push({ kind: "link", id: TEAM_DETAIL_FALLBACK_IDS.pushList, label: "Theo từng lần push" });
+    }
+    return items;
+  }
+
   const so = aggregateRow.structured_output;
   const ctx = getExtendedLlmContext(so);
   const op = extractOverallPicture(so);
-  const items: Array<{ id: string; label: string }> = [];
+
+  items.push({ kind: "heading", label: "Đánh giá toàn hệ thống (tổng hợp đội)" });
 
   const hist = typeof op?.historical_synthesis === "string" ? op.historical_synthesis.trim() : "";
   const evo = typeof op?.evolution_notes === "string" ? op.evolution_notes.trim() : "";
-  if (hist) items.push({ id: AGGREGATE_SECTION_IDS.historical, label: "Tổng hợp lịch sử" });
-  if (evo) items.push({ id: AGGREGATE_SECTION_IDS.evolution, label: "Tiến hóa qua các lần push" });
+  if (hist) items.push({ kind: "link", id: AGGREGATE_SECTION_IDS.historical, label: "Tổng hợp lịch sử" });
+  if (evo) items.push({ kind: "link", id: AGGREGATE_SECTION_IDS.evolution, label: "Tiến hóa qua các lần push" });
   if (ctx.hasInventory) {
-    items.push({ id: AGGREGATE_SECTION_IDS.inventory, label: "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" });
+    items.push({ kind: "link", id: AGGREGATE_SECTION_IDS.inventory, label: "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" });
   }
   if (shouldShowAggregateRagInNav(so, aggregateRow.rag_level)) {
-    items.push({ id: AGGREGATE_SECTION_IDS.rag, label: "RAG — mức độ và tính năng (từ LLM)" });
+    items.push({ kind: "link", id: AGGREGATE_SECTION_IDS.rag, label: "RAG — mức độ và tính năng (từ LLM)" });
   }
-  if (hasAssessmentForNav(so)) {
-    items.push({ id: AGGREGATE_SECTION_IDS.assessment, label: "Đánh giá (cấp đội / toàn hệ thống)" });
+
+  const assessment = extractAssessment(so);
+  if (assessment && hasAssessmentForNav(so)) {
+    items.push({ kind: "heading", label: "Đánh giá (ưu / nhược điểm…)" });
+    for (const { key, label } of ASSESSMENT_LABELS) {
+      const text = (assessment[key] as string | undefined)?.trim();
+      if (text) items.push({ kind: "link", id: navIdAssessment(String(key)), label });
+    }
   }
+
   const criteria = extractCriteriaComments(so);
-  if (criteriaHasAnyKey(criteria, R1_CRITERIA_KEYS)) {
-    items.push({ id: AGGREGATE_SECTION_IDS.r1, label: "Tiêu chí R1 — toàn hệ thống" });
+  if (criteria && criteriaHasAnyKey(criteria, R1_CRITERIA_KEYS)) {
+    items.push({ kind: "heading", label: "Tiêu chí R1" });
+    for (const { key, label } of RUBRIC_R1_LABELS) {
+      if (String(criteria[key] ?? "").trim()) {
+        items.push({ kind: "link", id: navIdCriteria(String(key)), label });
+      }
+    }
   }
-  if (criteriaHasAnyKey(criteria, R2_CRITERIA_KEYS)) {
-    items.push({ id: AGGREGATE_SECTION_IDS.r2, label: "Tiêu chí R2 — toàn hệ thống" });
+  if (criteria && criteriaHasAnyKey(criteria, R2_CRITERIA_KEYS)) {
+    items.push({ kind: "heading", label: "Tiêu chí R2" });
+    for (const { key, label } of RUBRIC_R2_LABELS) {
+      if (String(criteria[key] ?? "").trim()) {
+        items.push({
+          kind: "link",
+          id: navIdCriteria(String(key)),
+          label,
+          emphasis: key === "R2_04" ? "r2-04" : undefined,
+        });
+      }
+    }
   }
-  if (hasSmbAdvisoryContent(so)) {
-    items.push({ id: AGGREGATE_SECTION_IDS.smb, label: "Gợi ý cải tiến (SMB & quy mô)" });
+
+  const adv = extractSmbScaleAdvisory(so);
+  if (adv && hasSmbAdvisoryContent(so)) {
+    items.push({ kind: "heading", label: "SMB & quy mô" });
+    for (const { field, label } of SMB_ADVISORY_ROWS) {
+      const text = adv[field];
+      if (typeof text === "string" && text.trim()) {
+        items.push({ kind: "link", id: navIdSmb(String(field)), label });
+      }
+    }
   }
+
   if (ctx.promptHint) {
-    items.push({ id: AGGREGATE_SECTION_IDS.prompt, label: "Gợi ý tối ưu prompt — nên chỉnh gì" });
+    items.push({ kind: "link", id: AGGREGATE_SECTION_IDS.prompt, label: "Gợi ý tối ưu prompt — nên chỉnh gì" });
   }
   if (ctx.hasAiTests || ctx.hasSkeletonTests) {
-    items.push({ id: AGGREGATE_SECTION_IDS.tests, label: "Test case — toàn hệ thống" });
+    items.push({ kind: "link", id: AGGREGATE_SECTION_IDS.tests, label: "Test case — toàn hệ thống" });
   }
   if (ctx.hasQuestions) {
-    items.push({ id: AGGREGATE_SECTION_IDS.questions, label: "Câu hỏi — cấp đội / toàn hệ thống" });
+    items.push({ kind: "link", id: AGGREGATE_SECTION_IDS.questions, label: "Câu hỏi — cấp đội / toàn hệ thống" });
   }
+
+  if (perPushRows.length > 0) {
+    items.push({ kind: "link", id: TEAM_DETAIL_FALLBACK_IDS.pushList, label: "Theo từng lần push" });
+  }
+
   return items;
 }
 
@@ -385,7 +453,7 @@ export function TeamDetail({
       ) : null}
 
       {teamId && !homeSidebar ? (
-        <div className="identity-first-block page-section">
+        <div className="identity-first-block page-section aggregate-section-target" id={TEAM_DETAIL_FALLBACK_IDS.identity}>
           <div className="page-section-head">
             <h3 className="system-hero-title page-section-title">Hệ thống — mô tả &amp; công cụ</h3>
           </div>
@@ -404,7 +472,12 @@ export function TeamDetail({
       ) : null}
 
       {teamId && !loading && latestPerPush ? (
-        <div className="latest-push-snapshot" role="region" aria-label="Đánh giá push mới nhất">
+        <div
+          className="latest-push-snapshot aggregate-section-target"
+          id={TEAM_DETAIL_FALLBACK_IDS.latestPush}
+          role="region"
+          aria-label="Đánh giá push mới nhất"
+        >
           <h3 className="latest-push-snapshot__title">Đánh giá push mới nhất</h3>
           <p className="latest-push-snapshot__meta">
             Commit {shortSha(latestPerPush.commit_sha)} · cập nhật {toRelativeTime(latestPerPush.updated_at)} ·{" "}
@@ -504,7 +577,10 @@ export function TeamDetail({
       ) : null}
 
       {teamId && !homeSidebar ? (
-        <div className="page-section-head push-list-head push-list-head--with-actions">
+        <div
+          className="page-section-head push-list-head push-list-head--with-actions aggregate-section-target"
+          id={TEAM_DETAIL_FALLBACK_IDS.pushList}
+        >
           <h3 className="subsection-title page-section-title">Theo từng lần push</h3>
           {!loading && perPushRows.length > 0 ? (
             <div className="push-list-head__actions" role="group" aria-label="Mở hoặc thu chi tiết mọi push trên trang này">
@@ -749,7 +825,7 @@ function renderAssessmentBlock(
           const text = (assessment[key] as string | undefined)?.trim();
           if (!text) return null;
           return (
-            <div key={key} className="assessment-row">
+            <div key={key} id={navIdAssessment(String(key))} className="assessment-row aggregate-section-target">
               <span className="criteria-item-label">{label}</span>
               <ProsePre>{text}</ProsePre>
             </div>

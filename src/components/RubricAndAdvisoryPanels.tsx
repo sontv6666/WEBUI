@@ -1,8 +1,9 @@
 import type { CriteriaComments, SmbScaleAdvisory } from "../types/reviews";
 import { extractCriteriaComments, extractSmbScaleAdvisory } from "../types/reviews";
+import { navIdCriteria, navIdSmb } from "../teamDetailNavIds";
 import { ProsePre, SectionLabel } from "./Presentation";
 
-const RUBRIC_R1_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
+export const RUBRIC_R1_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
   { key: "R1_01", label: "R1_01 · Domain fit" },
   { key: "R1_02", label: "R1_02 · Data pipeline" },
   { key: "R1_03", label: "R1_03 · Retrieval" },
@@ -10,7 +11,7 @@ const RUBRIC_R1_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = 
   { key: "R1_05", label: "R1_05 · Slide & trình bày" },
 ];
 
-const RUBRIC_R2_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
+export const RUBRIC_R2_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
   { key: "R2_01", label: "R2_01 · Tư duy Agent & multi-hop (25%)" },
   { key: "R2_02", label: "R2_02 · Quản lý tài nguyên model (25%)" },
   { key: "R2_03", label: "R2_03 · Thực tế & tối ưu vận hành (15%)" },
@@ -49,7 +50,7 @@ export function TeamAggregateCriteriaSections({
       <span className="criteria-title">{title}</span>
       {labels.map(({ key, label }) =>
         criteria[key] ? (
-          <div key={key} style={{ marginTop: 12 }}>
+          <div key={key} id={navIdCriteria(String(key))} className="criteria-aggregate-rubric__criterion aggregate-section-target" style={{ marginTop: 12 }}>
             <span className="criteria-item-label">{label}</span>
             <ProsePre>{criteria[key] as string}</ProsePre>
           </div>
@@ -68,7 +69,7 @@ export function TeamAggregateCriteriaSections({
   );
 }
 
-const SMB_ADVISORY_ROWS: Array<{ field: keyof SmbScaleAdvisory; label: string }> = [
+export const SMB_ADVISORY_ROWS: Array<{ field: keyof SmbScaleAdvisory; label: string }> = [
   { field: "system_identity_recap", label: "Hệ thống — nhận diện (trước khi cải tiến)" },
   { field: "summary", label: "Khoảng cách & ưu tiên (tóm tắt)" },
   { field: "tech_and_architecture", label: "Công nghệ & kiến trúc" },
@@ -106,7 +107,8 @@ export function SmbScaleAdvisoryPanel({
       {rows.map(({ field, label, text }) => (
         <div
           key={field}
-          className={`smb-scale-advisory-panel__row${field === "system_identity_recap" ? " smb-scale-advisory-panel__row--identity" : ""}`}
+          id={navIdSmb(field)}
+          className={`smb-scale-advisory-panel__row aggregate-section-target${field === "system_identity_recap" ? " smb-scale-advisory-panel__row--identity" : ""}`}
         >
           <span className="criteria-item-label">{label}</span>
           <ProsePre>{text}</ProsePre>
