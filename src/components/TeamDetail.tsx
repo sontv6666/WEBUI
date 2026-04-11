@@ -216,10 +216,13 @@ export function TeamDetail({
               extractOverallPicture(latestPerPush.structured_output)?.push_summary ||
               fallbackSummary(latestPerPush.status)}
           </p>
-          <div className="push-core-review-block push-core-review-block--snapshot">
-            {renderRagMaturityPanel(latestPerPush.structured_output, latestPerPush.rag_level)}
-            {renderAssessmentBlock(latestPerPush.structured_output, "push")}
-          </div>
+          {renderCollapsibleRagAndAssessment(
+            latestPerPush.structured_output,
+            latestPerPush.rag_level,
+            "push",
+            "RAG & đánh giá chi tiết (push mới nhất) — nhấp để mở",
+            "push-core-review-details--snapshot"
+          )}
           <p className="latest-push-snapshot__hint">
             Luôn hiển thị bản <strong>per-push</strong> mới nhất theo thời gian cập nhật (toàn đội, không phụ thuộc trang
             phân trang). Dữ liệu đồng bộ từ Supabase khi có review mới (realtime + làm mới định kỳ).
@@ -233,17 +236,6 @@ export function TeamDetail({
             <h3 className="subsection-title page-section-title">Đánh giá toàn hệ thống</h3>
             <span className="badge badge--kind">{reviewKindLabelVi("team_aggregate")}</span>
           </div>
-          <p className="team-aggregate-meta">
-            Cập nhật {toRelativeTime(aggregateRow.updated_at)} · {toAbsoluteTime(aggregateRow.updated_at)}
-            {aggregateRow.rag_level ? ` · RAG: ${aggregateRow.rag_level}` : ""}
-          </p>
-          <MetaChips
-            items={[
-              { label: "Repo", value: aggregateRow.repo_name || "—" },
-              { label: "Tham chiếu commit", value: shortSha(aggregateRow.commit_sha) },
-              { label: "Trạng thái", value: formatStatusLabel(aggregateRow.status) },
-            ]}
-          />
           <p className="summary-text">
             {aggregateRow.push_summary ||
               extractOverallPicture(aggregateRow.structured_output)?.push_summary ||
@@ -253,9 +245,14 @@ export function TeamDetail({
             Nội dung lấy từ bản ghi <strong>tổng hợp đội</strong> mới nhất trong DB — khi có commit/pipeline mới, chạy lại workflow aggregate
             để cập nhật (realtime và polling 60s đã bật cho bảng này).
           </p>
-          <div className="push-core-review-block push-core-review-block--aggregate">
-            {renderRagMaturityPanel(aggregateRow.structured_output, aggregateRow.rag_level)}
-            {renderAssessmentBlock(aggregateRow.structured_output, "team")}
+          <div className="team-aggregate-review-stack">
+            {renderCollapsibleRagAndAssessment(
+              aggregateRow.structured_output,
+              aggregateRow.rag_level,
+              "team",
+              "RAG & đánh giá chi tiết (toàn hệ thống) — nhấp để mở",
+              "push-core-review-details--aggregate"
+            )}
             {renderAggregateRubricAdvisoryPlaceholder(aggregateRow.structured_output)}
             <TeamAggregateCriteriaSections structuredOutput={aggregateRow.structured_output} />
             <SmbScaleAdvisoryPanel structuredOutput={aggregateRow.structured_output} />
@@ -385,10 +382,13 @@ export function TeamDetail({
                   extractOverallPicture(item.structured_output)?.push_summary ||
                   fallbackSummary(item.status)}
               </p>
-              <div className="push-core-review-block">
-                {renderRagMaturityPanel(item.structured_output, item.rag_level)}
-                {renderAssessmentBlock(item.structured_output, "push")}
-              </div>
+              {renderCollapsibleRagAndAssessment(
+                item.structured_output,
+                item.rag_level,
+                "push",
+                "RAG & đánh giá chi tiết (push) — nhấp để mở",
+                "push-core-review-details--list"
+              )}
               <div
                 className="push-detail-card__collapsible"
                 id={`push-detail-body-${cardKey}`}
@@ -430,6 +430,35 @@ const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = 
   { key: "completeness", label: "Độ hoàn thiện" },
   { key: "security", label: "Bảo mật" },
 ];
+
+function renderCollapsibleRagAndAssessment(
+  structuredOutput: Record<string, unknown> | null,
+  ragLevel: string | null | undefined,
+  assessmentScope: "push" | "team",
+  summaryText: string,
+  detailsExtraClass?: string
+) {
+  const ragPanel = renderRagMaturityPanel(structuredOutput, ragLevel);
+  const assessBlock = renderAssessmentBlock(structuredOutput, assessmentScope);
+  if (!ragPanel && !assessBlock) return null;
+  return (
+    <details
+      className={`push-core-review-details${detailsExtraClass ? ` ${detailsExtraClass}` : ""}`}
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+    >
+      <summary className="push-core-review-details__summary">{summaryText}</summary>
+      <div
+        className={`push-core-review-block push-core-review-block--in-details${
+          assessmentScope === "team" ? " push-core-review-block--aggregate-inner" : ""
+        }`}
+      >
+        {ragPanel}
+        {assessBlock}
+      </div>
+    </details>
+  );
+}
 
 function renderAggregateRubricAdvisoryPlaceholder(structuredOutput: Record<string, unknown> | null) {
   const hasR = hasAggregateRubricContent(structuredOutput);
@@ -682,7 +711,10 @@ function renderExtendedLlmSections(
 
       {promptHint ? (
         <div className="criteria-box prompt-refine-panel">
-          <SectionLabel icon="→">Gợi ý tối ưu prompt (so với prompt đội đang dùng)</SectionLabel>
+          <SectionLabel icon="→">Gợi ý tối ưu prompt — nên chỉnh gì</SectionLabel>
+          <p className="prompt-refine-panel__hint">
+            Chỉ liệt kê hạng mục cần tối ưu (LLM được hướng dẫn trả gạch đầu dòng ngắn); tránh sao chép cả prompt dài.
+          </p>
           <ProsePre>{promptHint}</ProsePre>
         </div>
       ) : null}

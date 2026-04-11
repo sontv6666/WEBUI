@@ -734,6 +734,76 @@ body {
   margin-bottom: 16px;
 }
 
+/* Đánh giá toàn hệ thống: stack rubric/SMB dưới khối RAG+assessment thu gọn */
+.team-aggregate-review-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  margin-bottom: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.push-core-review-details--aggregate {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.push-core-review-details--snapshot {
+  margin-top: 10px;
+  margin-bottom: 8px;
+}
+
+.push-core-review-block--aggregate-inner {
+  margin-bottom: 0;
+}
+
+.prompt-refine-panel__hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* Theo từng push: RAG + assessment mặc định thu gọn trong <details> */
+.push-core-review-details {
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.push-core-review-details__summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  list-style: none;
+  padding: 6px 0;
+  user-select: none;
+}
+
+.push-core-review-details__summary::-webkit-details-marker {
+  display: none;
+}
+
+.push-core-review-details__summary::before {
+  content: "▸ ";
+  display: inline-block;
+  transition: transform 0.15s ease;
+  margin-right: 4px;
+  opacity: 0.75;
+}
+
+.push-core-review-details[open] > .push-core-review-details__summary::before {
+  transform: rotate(90deg);
+}
+
+.push-core-review-block--in-details {
+  margin-top: 8px;
+  padding-top: 0;
+  border-top: none;
+}
+
 .rag-maturity-panel__level {
   margin: 0 0 8px;
   font-size: 13px;
