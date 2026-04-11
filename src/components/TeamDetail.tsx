@@ -1,7 +1,11 @@
-import type { ReviewItem } from "../types/reviews";
+import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
+  extractAssessment,
   extractCriteriaComments,
+  extractInventoryExhaustive,
   extractOverallPicture,
+  extractPromptRefinement,
+  extractSuggestedTestCases,
   fallbackSummary,
   reviewKindOf,
   shortSha,
@@ -115,6 +119,7 @@ export function TeamDetail({
                 ]}
               />
               <p className="summary-text">{aggregateReview.push_summary || fallbackSummary(aggregateReview.status)}</p>
+              {renderExtendedLlmSections(aggregateReview.structured_output)}
               {renderHistoricalSynthesis(aggregateReview.structured_output)}
               <details className="json-details">
                 <summary>Structured output — aggregate (JSON)</summary>
@@ -172,6 +177,7 @@ export function TeamDetail({
               />
               <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
               <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
+              {renderExtendedLlmSections(item.structured_output)}
               {renderCriteriaCommentsPerPush(item.structured_output)}
               <details className="json-details">
                 <summary>Structured output — push này (JSON)</summary>
@@ -181,6 +187,97 @@ export function TeamDetail({
           );
         })}
     </section>
+  );
+}
+
+const INVENTORY_LABELS: Array<{ key: keyof InventoryExhaustive; label: string }> = [
+  { key: "llm_models_and_apis", label: "LLM / API" },
+  { key: "frameworks_and_runtimes", label: "Framework & runtime" },
+  { key: "vector_databases", label: "Vector DB" },
+  { key: "agent_orchestration", label: "Agent / orchestration" },
+  { key: "third_party_integrations", label: "Tích hợp khác" },
+];
+
+const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = [
+  { key: "advantages", label: "Ưu điểm" },
+  { key: "disadvantages", label: "Khuyết điểm" },
+  { key: "context_and_fit", label: "Ngữ cảnh & đề bài" },
+  { key: "source_structure", label: "Cấu trúc source" },
+  { key: "completeness", label: "Độ hoàn thiện" },
+  { key: "security", label: "Bảo mật" },
+];
+
+function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | null) {
+  const inv = extractInventoryExhaustive(structuredOutput);
+  const assessment = extractAssessment(structuredOutput);
+  const tests = extractSuggestedTestCases(structuredOutput);
+  const promptHint = extractPromptRefinement(structuredOutput);
+
+  const hasInventory =
+    inv &&
+    INVENTORY_LABELS.some(({ key }) => Array.isArray(inv[key]) && (inv[key] as string[]).length > 0);
+  const hasAssessment =
+    assessment && ASSESSMENT_LABELS.some(({ key }) => Boolean((assessment[key] as string | undefined)?.trim()));
+  const hasTests = tests && tests.length > 0;
+  if (!hasInventory && !hasAssessment && !hasTests && !promptHint) return null;
+
+  return (
+    <div className="criteria-box llm-extended-block">
+      {hasInventory && inv ? (
+        <div style={{ marginBottom: 14 }}>
+          <SectionLabel icon="◇">Danh mục công nghệ (liệt kê đầy đủ)</SectionLabel>
+          <div className="inventory-grid">
+            {INVENTORY_LABELS.map(({ key, label }) => {
+              const arr = (inv[key] as string[] | undefined) ?? [];
+              if (!arr.length) return null;
+              return (
+                <div key={key} className="inventory-category">
+                  <span className="inventory-cat-label">{label}</span>
+                  <ul className="inventory-tags">
+                    {arr.map((t) => (
+                      <li key={t}>{t}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+      {hasAssessment && assessment ? (
+        <div style={{ marginBottom: 14 }}>
+          <SectionLabel icon="◎">Đánh giá</SectionLabel>
+          {ASSESSMENT_LABELS.map(({ key, label }) => {
+            const text = (assessment[key] as string | undefined)?.trim();
+            if (!text) return null;
+            return (
+              <div key={key} style={{ marginTop: 10 }}>
+                <span className="criteria-item-label">{label}</span>
+                <ProsePre>{text}</ProsePre>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {hasTests && tests ? (
+        <div style={{ marginBottom: promptHint ? 14 : 0 }}>
+          <SectionLabel icon="✓">Gợi ý test case</SectionLabel>
+          <ol className="test-case-list">
+            {tests.map((t, i) => (
+              <li key={i}>
+                <ProsePre>{t}</ProsePre>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+      {promptHint ? (
+        <div>
+          <SectionLabel icon="→">Gợi ý tối ưu prompt</SectionLabel>
+          <ProsePre>{promptHint}</ProsePre>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

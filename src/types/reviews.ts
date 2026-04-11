@@ -67,6 +67,66 @@ export function extractOverallPicture(structuredOutput: Record<string, unknown> 
   return null;
 }
 
+function unwrapStructuredRoot(structuredOutput: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!structuredOutput) return null;
+  if (
+    structuredOutput.inventory_exhaustive != null ||
+    structuredOutput.assessment != null ||
+    structuredOutput.suggested_test_cases != null ||
+    structuredOutput.suggested_prompt_refinement != null
+  ) {
+    return structuredOutput;
+  }
+  const nested = structuredOutput.output;
+  if (nested && typeof nested === "object") return nested as Record<string, unknown>;
+  return structuredOutput;
+}
+
+export type InventoryExhaustive = {
+  llm_models_and_apis?: string[];
+  frameworks_and_runtimes?: string[];
+  vector_databases?: string[];
+  agent_orchestration?: string[];
+  third_party_integrations?: string[];
+};
+
+export type AssessmentBlock = {
+  advantages?: string;
+  disadvantages?: string;
+  context_and_fit?: string;
+  source_structure?: string;
+  completeness?: string;
+  security?: string;
+};
+
+export function extractInventoryExhaustive(structuredOutput: Record<string, unknown> | null): InventoryExhaustive | null {
+  const root = unwrapStructuredRoot(structuredOutput);
+  const inv = root?.inventory_exhaustive;
+  if (!inv || typeof inv !== "object") return null;
+  return inv as InventoryExhaustive;
+}
+
+export function extractAssessment(structuredOutput: Record<string, unknown> | null): AssessmentBlock | null {
+  const root = unwrapStructuredRoot(structuredOutput);
+  const a = root?.assessment;
+  if (!a || typeof a !== "object") return null;
+  return a as AssessmentBlock;
+}
+
+export function extractSuggestedTestCases(structuredOutput: Record<string, unknown> | null): string[] | null {
+  const root = unwrapStructuredRoot(structuredOutput);
+  const t = root?.suggested_test_cases;
+  if (!Array.isArray(t)) return null;
+  return t.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+}
+
+export function extractPromptRefinement(structuredOutput: Record<string, unknown> | null): string | null {
+  const root = unwrapStructuredRoot(structuredOutput);
+  const s = root?.suggested_prompt_refinement;
+  if (typeof s !== "string" || !s.trim()) return null;
+  return s.trim();
+}
+
 export type TeamLatestReview = {
   team_id: string;
   repo_name: string | null;
