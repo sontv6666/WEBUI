@@ -149,6 +149,80 @@ export function extractSuggestedQuestionsForTeam(structuredOutput: Record<string
   return t.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
 }
 
+/** Metadata từ n8n aggregate / cron (~1h), thường nằm trong `structured_output.initial_input`. */
+export type BatchReviewMeta = {
+  /** Số commit trong đợt review (null nếu không có trong dữ liệu — ví dụ bản ghi cũ trước khi merge initial_input). */
+  commitsInBatch: number | null;
+  batchedCommitShas: string[];
+  isCronBatch: boolean;
+};
+
+function isStringArray(x: unknown): x is string[] {
+  return Array.isArray(x) && x.every((i) => typeof i === "string");
+}
+
+function readInitialInputLike(structuredOutput: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!structuredOutput || typeof structuredOutput !== "object") return null;
+  const ii = structuredOutput.initial_input;
+  if (ii && typeof ii === "object") return ii as Record<string, unknown>;
+  if (
+    structuredOutput.commit_count != null ||
+    structuredOutput.batched_commit_shas != null ||
+    structuredOutput.cron_batch_review != null
+  ) {
+    return structuredOutput;
+  }
+  return null;
+}
+
+export function extractBatchReviewMeta(structuredOutput: Record<string, unknown> | null): BatchReviewMeta {
+  const empty: BatchReviewMeta = { commitsInBatch: null, batchedCommitShas: [], isCronBatch: false };
+  const src = readInitialInputLike(structuredOutput);
+  if (!src) return empty;
+
+  const isCronBatch = Boolean(src.cron_batch_review);
+  let batchedCommitShas: string[] = [];
+  if (isStringArray(src.batched_commit_shas)) {
+    batchedCommitShas = src.batched_commit_shas.filter((s) => s.trim().length > 0);
+  }
+
+  let commitsInBatch: number | null = null;
+  if (typeof src.commit_count === "number" && Number.isFinite(src.commit_count) && src.commit_count >= 0) {
+    commitsInBatch = Math.floor(src.commit_count);
+  } else if (batchedCommitShas.length > 0) {
+    commitsInBatch = batchedCommitShas.length;
+  }
+
+  return { commitsInBatch, batchedCommitShas, isCronBatch };
+}
+
+function resolveCommitsInBatchN(meta: BatchReviewMeta): number | null {
+  if (meta.commitsInBatch != null && Number.isFinite(meta.commitsInBatch)) return meta.commitsInBatch;
+  if (meta.batchedCommitShas.length > 0) return meta.batchedCommitShas.length;
+  return null;
+}
+
+/**
+ * Giá trị chip (không lặp với `label` MetaChip).
+ * Hiện khi cron ~1h hoặc nhiều hơn 1 commit trong đợt; bản ghi cũ không có `initial_input` → null.
+ */
+export function formatBatchReviewDisplayValue(meta: BatchReviewMeta): string | null {
+  const n = resolveCommitsInBatchN(meta);
+  if (meta.isCronBatch) {
+    if (n != null) return `${n} commit · cron ~1h`;
+    return "Cron ~1h (chưa rõ số commit)";
+  }
+  if (n != null && n > 1) return `${n} commit trong đợt`;
+  return null;
+}
+
+export function formatBatchedShaPreview(shas: string[], maxHead = 3): string | null {
+  if (shas.length === 0) return null;
+  const heads = shas.slice(0, maxHead).map((s) => (s.length > 7 ? s.slice(0, 7) : s));
+  const rest = shas.length - maxHead;
+  return rest > 0 ? `${heads.join(", ")} +${rest}` : heads.join(", ");
+}
+
 /** Khung test tối thiểu sinh từ inventory khi LLM chưa trả suggested_test_cases (bổ trợ trên UI). */
 export function buildSkeletonTestCasesFromInventory(inv: InventoryExhaustive | null): string[] {
   if (!inv) return [];

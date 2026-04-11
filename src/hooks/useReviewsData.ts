@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { ReviewItem, TeamLatestReview } from "../types/reviews";
 
-const GLOBAL_LIMIT = 1000;
+/** Giới hạn số hàng `ai_reviews` tải cho timeline toàn cục (Supabase `.limit`). */
+export const GLOBAL_FEED_QUERY_LIMIT = 1000;
+const GLOBAL_LIMIT = GLOBAL_FEED_QUERY_LIMIT;
 const TEAM_LIMIT = 50;
 
 export function useReviewsData() {

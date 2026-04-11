@@ -3,6 +3,7 @@ import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/
 import {
   buildSkeletonTestCasesFromInventory,
   extractAssessment,
+  extractBatchReviewMeta,
   extractCriteriaComments,
   extractInventoryExhaustive,
   extractOverallPicture,
@@ -10,6 +11,8 @@ import {
   extractSuggestedQuestionsForTeam,
   extractSuggestedTestCases,
   fallbackSummary,
+  formatBatchReviewDisplayValue,
+  formatBatchedShaPreview,
   formatStatusLabel,
   shouldShowReviewStatusBadge,
   shortSha,
@@ -127,6 +130,18 @@ export function TeamDetail({
       {!loading &&
         paginatedPushRows.map((item) => {
           const op = extractOverallPicture(item.structured_output);
+          const batchMeta = extractBatchReviewMeta(item.structured_output);
+          const batchValue = formatBatchReviewDisplayValue(batchMeta);
+          const batchShaPreview = formatBatchedShaPreview(batchMeta.batchedCommitShas);
+          const pushChips: Array<{ label: string; value: string }> = [
+            { label: "Repo", value: item.repo_name || "—" },
+            { label: "Commit", value: shortSha(item.commit_sha) },
+            { label: "Cập nhật", value: `${toRelativeTime(item.updated_at)} · ${toAbsoluteTime(item.updated_at)}` },
+            { label: "RAG", value: item.rag_level || "—" },
+            { label: "Input", value: String(item.input_code_length ?? 0) },
+          ];
+          if (batchValue) pushChips.push({ label: "Đợt review", value: batchValue });
+          if (batchShaPreview) pushChips.push({ label: "SHA trong đợt", value: batchShaPreview });
           return (
             <article
               key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`}
@@ -149,15 +164,7 @@ export function TeamDetail({
                   <span className={`badge ${item.status}`}>{formatStatusLabel(item.status)}</span>
                 ) : null}
               </div>
-              <MetaChips
-                items={[
-                  { label: "Repo", value: item.repo_name || "—" },
-                  { label: "Commit", value: shortSha(item.commit_sha) },
-                  { label: "Cập nhật", value: `${toRelativeTime(item.updated_at)} · ${toAbsoluteTime(item.updated_at)}` },
-                  { label: "RAG", value: item.rag_level || "—" },
-                  { label: "Input", value: String(item.input_code_length ?? 0) },
-                ]}
-              />
+              <MetaChips items={pushChips} />
               <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
               <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
               {renderExtendedLlmSections(item.structured_output)}

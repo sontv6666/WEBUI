@@ -4,9 +4,12 @@ import { computePageCount, PaginationBar, slicePage } from "./components/Paginat
 import { TeamDetail } from "./components/TeamDetail";
 import { TeamsTable } from "./components/TeamsTable";
 import { MetaChips, Skeleton } from "./components/Presentation";
-import { useReviewsData } from "./hooks/useReviewsData";
+import { GLOBAL_FEED_QUERY_LIMIT, useReviewsData } from "./hooks/useReviewsData";
 import {
+  extractBatchReviewMeta,
   fallbackSummary,
+  formatBatchReviewDisplayValue,
+  formatBatchedShaPreview,
   formatStatusLabel,
   shouldShowReviewStatusBadge,
   shortSha,
@@ -110,6 +113,15 @@ export default function App() {
                   label="Cập nhật gần nhất"
                   value={stats.latest ? `${toRelativeTime(stats.latest)} · ${toAbsoluteTime(stats.latest)}` : "—"}
                 />
+                <KpiCard
+                  label="Bản ghi commit (đang tải)"
+                  value={globalFeed.length}
+                  hint={
+                    globalFeed.length >= GLOBAL_FEED_QUERY_LIMIT
+                      ? `Tối đa ${GLOBAL_FEED_QUERY_LIMIT} bản ghi mỗi lần tải — có thể còn nhiều hơn trong DB.`
+                      : `Tối đa ${GLOBAL_FEED_QUERY_LIMIT} bản ghi mỗi lần tải.`
+                  }
+                />
               </section>
 
               <div className="controls">
@@ -145,6 +157,8 @@ export default function App() {
                         itemsOnPage={timelineFilterStats.itemsOnPage}
                         uniqueTeamsOnPage={timelineFilterStats.uniqueTeamsOnPage}
                         pageSize={TIMELINE_PAGE_SIZE}
+                        loadedCap={GLOBAL_FEED_QUERY_LIMIT}
+                        atLoadedCap={globalFeed.length >= GLOBAL_FEED_QUERY_LIMIT}
                       />
                       <PaginationBar
                         className="timeline-pagination timeline-pagination--top"
@@ -251,12 +265,16 @@ function TimelineLayoutMeta({
   itemsOnPage,
   uniqueTeamsOnPage,
   pageSize,
+  loadedCap,
+  atLoadedCap,
 }: {
   totalPushes: number;
   uniqueTeams: number;
   itemsOnPage: number;
   uniqueTeamsOnPage: number;
   pageSize: number;
+  loadedCap: number;
+  atLoadedCap: boolean;
 }) {
   return (
     <div className="timeline-layout-meta" role="status" aria-label="Thống kê timeline">
@@ -264,6 +282,12 @@ function TimelineLayoutMeta({
         Sau tìm kiếm: <strong>{totalPushes}</strong> push · <strong>{uniqueTeams}</strong> đội · trang này:{" "}
         <strong>{itemsOnPage}</strong> push · <strong>{uniqueTeamsOnPage}</strong> đội · tối đa{" "}
         <strong>{pageSize}</strong> push/trang
+        {atLoadedCap ? (
+          <>
+            {" "}
+            · <span className="timeline-layout-meta__warn">đang giới hạn {loadedCap} bản ghi tải từ DB</span>
+          </>
+        ) : null}
       </p>
     </div>
   );
@@ -287,6 +311,17 @@ function TimelineSkeleton() {
 }
 
 function TimelineItem({ item, onOpenTeam }: { item: ReviewItem; onOpenTeam?: (teamId: string) => void }) {
+  const batchMeta = extractBatchReviewMeta(item.structured_output);
+  const batchValue = formatBatchReviewDisplayValue(batchMeta);
+  const batchShaPreview = formatBatchedShaPreview(batchMeta.batchedCommitShas);
+  const chipItems: Array<{ label: string; value: string }> = [
+    { label: "Repo", value: item.repo_name || "—" },
+    { label: "Commit", value: shortSha(item.commit_sha) },
+    { label: "Cập nhật", value: `${toRelativeTime(item.updated_at)} · ${toAbsoluteTime(item.updated_at)}` },
+  ];
+  if (batchValue) chipItems.push({ label: "Đợt review", value: batchValue });
+  if (batchShaPreview) chipItems.push({ label: "SHA trong đợt", value: batchShaPreview });
+
   return (
     <article
       className={`timeline-item ${onOpenTeam ? "clickable" : ""}`}
@@ -307,13 +342,7 @@ function TimelineItem({ item, onOpenTeam }: { item: ReviewItem; onOpenTeam?: (te
         <strong>{item.team_id}</strong>
         {shouldShowReviewStatusBadge(item.status) ? <StatusBadge status={item.status} /> : null}
       </div>
-      <MetaChips
-        items={[
-          { label: "Repo", value: item.repo_name || "—" },
-          { label: "Commit", value: shortSha(item.commit_sha) },
-          { label: "Cập nhật", value: `${toRelativeTime(item.updated_at)} · ${toAbsoluteTime(item.updated_at)}` },
-        ]}
-      />
+      <MetaChips items={chipItems} />
       <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
       {onOpenTeam ? (
         <div className="timeline-item-cta" aria-hidden>
@@ -325,11 +354,12 @@ function TimelineItem({ item, onOpenTeam }: { item: ReviewItem; onOpenTeam?: (te
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string | number }) {
+function KpiCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
   return (
     <div className="kpi-card">
       <span>{label}</span>
       <strong>{value}</strong>
+      {hint ? <p className="kpi-card__hint">{hint}</p> : null}
     </div>
   );
 }

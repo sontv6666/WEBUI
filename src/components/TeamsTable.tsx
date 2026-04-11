@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReviewItem, TeamLatestReview } from "../types/reviews";
 import {
+  extractBatchReviewMeta,
   extractCriteriaComments,
   extractOverallPicture,
+  formatBatchReviewDisplayValue,
+  formatBatchedShaPreview,
   formatStatusLabel,
   shouldShowReviewStatusBadge,
   shortSha,
@@ -82,6 +85,21 @@ export function TeamsTable({
             const latestOp = extractOverallPicture(
               teamCommits.find((c) => c.commit_sha === team.commit_sha)?.structured_output ?? null
             );
+            const latestByTime = teamCommits.reduce<ReviewItem | null>((best, c) => {
+              if (!best) return c;
+              return new Date(c.updated_at).getTime() >= new Date(best.updated_at).getTime() ? c : best;
+            }, null);
+            const latestBatchMeta = extractBatchReviewMeta(latestByTime?.structured_output ?? null);
+            const latestBatchValue = formatBatchReviewDisplayValue(latestBatchMeta);
+            const latestBatchShas = formatBatchedShaPreview(latestBatchMeta.batchedCommitShas);
+            const teamMetaChips: Array<{ label: string; value: string }> = [
+              { label: "Repo", value: team.repo_name || "—" },
+              { label: "Commit mới nhất", value: shortSha(team.commit_sha || null) },
+              { label: "Cập nhật", value: toAbsoluteTime(team.updated_at) },
+              { label: "Commit đã lưu (DB)", value: String(teamCommits.length) },
+            ];
+            if (latestBatchValue) teamMetaChips.push({ label: "Đợt gần nhất", value: latestBatchValue });
+            if (latestBatchShas) teamMetaChips.push({ label: "SHA trong đợt", value: latestBatchShas });
             return (
               <article
                 key={`group-${team.team_id}`}
@@ -104,14 +122,7 @@ export function TeamsTable({
                     <span className={`badge ${team.status}`}>{formatStatusLabel(team.status)}</span>
                   ) : null}
                 </div>
-                <MetaChips
-                  items={[
-                    { label: "Repo", value: team.repo_name || "—" },
-                    { label: "Commit mới nhất", value: shortSha(team.commit_sha || null) },
-                    { label: "Cập nhật", value: toAbsoluteTime(team.updated_at) },
-                    { label: "Số push đã review", value: String(teamCommits.length) },
-                  ]}
-                />
+                <MetaChips items={teamMetaChips} />
                 {(latestOp?.project_about?.trim() || latestOp?.tools_plain_bullets?.trim()) ? (
                   <>
                     <p className="system-snapshot-hint">Hệ thống (theo push mới nhất có dữ liệu)</p>
@@ -131,6 +142,18 @@ export function TeamsTable({
                     {teamCommits.length === 0 && <p className="state">Chưa có bản ghi per-push cho đội này.</p>}
                     {teamCommits.map((commit) => {
                       const op = extractOverallPicture(commit.structured_output);
+                      const batchMeta = extractBatchReviewMeta(commit.structured_output);
+                      const batchValue = formatBatchReviewDisplayValue(batchMeta);
+                      const batchShaPreview = formatBatchedShaPreview(batchMeta.batchedCommitShas);
+                      const commitChips: Array<{ label: string; value: string }> = [
+                        {
+                          label: "Cập nhật",
+                          value: `${toRelativeTime(commit.updated_at)} · ${toAbsoluteTime(commit.updated_at)}`,
+                        },
+                        { label: "RAG", value: commit.rag_level || "—" },
+                      ];
+                      if (batchValue) commitChips.push({ label: "Đợt review", value: batchValue });
+                      if (batchShaPreview) commitChips.push({ label: "SHA trong đợt", value: batchShaPreview });
                       return (
                         <div key={`${commit.team_id}-${commit.commit_sha}-${commit.updated_at}`} className="commit-card">
                           <div className="line">
@@ -139,12 +162,7 @@ export function TeamsTable({
                               <span className={`badge ${commit.status}`}>{formatStatusLabel(commit.status)}</span>
                             ) : null}
                           </div>
-                          <MetaChips
-                            items={[
-                              { label: "Cập nhật", value: `${toRelativeTime(commit.updated_at)} · ${toAbsoluteTime(commit.updated_at)}` },
-                              { label: "RAG", value: commit.rag_level || "—" },
-                            ]}
-                          />
+                          <MetaChips items={commitChips} />
                           <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
                           <p>{commit.push_summary || "Không có tóm tắt."}</p>
                           <CriteriaCommentsBlock structuredOutput={commit.structured_output} />
