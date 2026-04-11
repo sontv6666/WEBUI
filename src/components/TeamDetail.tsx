@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { AssessmentBlock, CriteriaComments, InventoryExhaustive, ReviewItem } from "../types/reviews";
+import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
   buildSkeletonTestCasesFromInventory,
   extractAssessment,
   extractBatchReviewMeta,
-  extractCriteriaComments,
   extractInventoryExhaustive,
   extractOverallPicture,
   extractPromptRefinement,
@@ -25,6 +24,7 @@ import {
 } from "../types/reviews";
 import { computePageCount, PaginationBar, slicePage } from "./Pagination";
 import { IdentityPlaceholder, MetaChips, ProjectToolsPanels, ProsePre, SectionLabel, Skeleton } from "./Presentation";
+import { SmbScaleAdvisoryPanel, TeamAggregateCriteriaSections } from "./RubricAndAdvisoryPanels";
 
 const PUSH_LIST_PAGE_SIZE = 5;
 
@@ -216,7 +216,6 @@ export function TeamDetail({
           </p>
           <div className="push-core-review-block push-core-review-block--snapshot">
             {renderRagMaturityPanel(latestPerPush.structured_output, latestPerPush.rag_level)}
-            {renderCriteriaCommentsPerPush(latestPerPush.structured_output)}
             {renderAssessmentBlock(latestPerPush.structured_output, "push")}
           </div>
           <p className="latest-push-snapshot__hint">
@@ -255,6 +254,8 @@ export function TeamDetail({
           <div className="push-core-review-block push-core-review-block--aggregate">
             {renderRagMaturityPanel(aggregateRow.structured_output, aggregateRow.rag_level)}
             {renderAssessmentBlock(aggregateRow.structured_output, "team")}
+            <TeamAggregateCriteriaSections structuredOutput={aggregateRow.structured_output} />
+            <SmbScaleAdvisoryPanel structuredOutput={aggregateRow.structured_output} />
           </div>
           <div className="detail-panels-region">
             {renderHistoricalSynthesis(aggregateRow.structured_output)}
@@ -271,8 +272,8 @@ export function TeamDetail({
         <div className="team-aggregate-missing" role="status">
           <p>
             <strong>Chưa có đánh giá tổng hợp toàn hệ thống</strong> (hàng <code>team_aggregate</code> trong{" "}
-            <code>ai_reviews</code>). Hiện chỉ có review theo từng push. Khi n8n ghi bản tổng hợp đội, khối trên sẽ
-            hiện tự động với test case và câu hỏi cấp hệ thống.
+            <code>ai_reviews</code>). Hiện chỉ có review theo từng push. Khi n8n ghi bản tổng hợp đội (workflow mới),
+            khối trên sẽ hiện tiêu chí R1/R2, gợi ý cải tiến SMB &amp; quy mô, test case và câu hỏi cấp hệ thống.
           </p>
         </div>
       ) : null}
@@ -383,7 +384,6 @@ export function TeamDetail({
               </p>
               <div className="push-core-review-block">
                 {renderRagMaturityPanel(item.structured_output, item.rag_level)}
-                {renderCriteriaCommentsPerPush(item.structured_output)}
                 {renderAssessmentBlock(item.structured_output, "push")}
               </div>
               <div
@@ -696,52 +696,3 @@ function renderHistoricalSynthesis(structuredOutput: Record<string, unknown> | n
   );
 }
 
-const RUBRIC_R1_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
-  { key: "R1_01", label: "R1_01 · Domain fit" },
-  { key: "R1_02", label: "R1_02 · Data pipeline" },
-  { key: "R1_03", label: "R1_03 · Retrieval" },
-  { key: "R1_04", label: "R1_04 · Intent & prompting" },
-  { key: "R1_05", label: "R1_05 · Slide & trình bày" },
-];
-
-const RUBRIC_R2_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
-  { key: "R2_01", label: "R2_01 · Tư duy Agent & multi-hop (25%)" },
-  { key: "R2_02", label: "R2_02 · Quản lý tài nguyên model (25%)" },
-  { key: "R2_03", label: "R2_03 · Thực tế & tối ưu vận hành (15%)" },
-  { key: "R2_04", label: "R2_04 · Mở rộng & sáng tạo (15%)" },
-  { key: "R2_05", label: "R2_05 · Phản biện hội đồng (20%)" },
-];
-
-function renderCriteriaCommentsPerPush(structuredOutput: Record<string, unknown> | null) {
-  const criteria = extractCriteriaComments(structuredOutput);
-  if (!criteria) return null;
-
-  const hasR1 = RUBRIC_R1_LABELS.some(({ key }) => Boolean(criteria[key]));
-  const hasR2 = RUBRIC_R2_LABELS.some(({ key }) => Boolean(criteria[key]));
-  if (!hasR1 && !hasR2) return null;
-
-  const renderGroup = (
-    title: string,
-    labels: typeof RUBRIC_R1_LABELS,
-    extraClass?: string
-  ) => (
-    <div className={`criteria-box criteria-per-push${extraClass ? ` ${extraClass}` : ""}`}>
-      <span className="criteria-title">{title}</span>
-      {labels.map(({ key, label }) =>
-        criteria[key] ? (
-          <div key={key} style={{ marginTop: 12 }}>
-            <span className="criteria-item-label">{label}</span>
-            <ProsePre>{criteria[key] as string}</ProsePre>
-          </div>
-        ) : null
-      )}
-    </div>
-  );
-
-  return (
-    <div className="criteria-rubric-stack">
-      {hasR1 ? renderGroup("Tiêu chí R1 — push này", RUBRIC_R1_LABELS) : null}
-      {hasR2 ? renderGroup("Tiêu chí R2 — push này", RUBRIC_R2_LABELS, "criteria-per-push--r2") : null}
-    </div>
-  );
-}

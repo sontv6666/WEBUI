@@ -1,9 +1,39 @@
 import type { CSSProperties, ReactNode } from "react";
 
+/**
+ * LLM thường dùng Markdown `**đoạn**` để nhấn mạnh; React không parse Markdown nên cần chuyển thành <strong>.
+ * Giữ nguyên chuỗi còn lại (xuống dòng, bullet) — class `prose-pre` vẫn dùng white-space: pre-wrap.
+ */
+function renderTextWithMarkdownBold(text: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  while (i < text.length) {
+    const open = text.indexOf("**", i);
+    if (open === -1) {
+      nodes.push(text.slice(i));
+      break;
+    }
+    if (open > i) {
+      nodes.push(text.slice(i, open));
+    }
+    const close = text.indexOf("**", open + 2);
+    if (close === -1) {
+      nodes.push(text.slice(open));
+      break;
+    }
+    nodes.push(<strong key={`md-b-${key++}`}>{text.slice(open + 2, close)}</strong>);
+    i = close + 2;
+  }
+  if (nodes.length === 0) return text;
+  if (nodes.length === 1) return nodes[0];
+  return <>{nodes}</>;
+}
+
 /** AI-generated text often uses newlines and "- " bullets — preserve layout. */
 export function ProsePre({ children, className = "" }: { children: string | null | undefined; className?: string }) {
   if (!children?.trim()) return null;
-  return <div className={`prose-pre ${className}`.trim()}>{children}</div>;
+  return <div className={`prose-pre ${className}`.trim()}>{renderTextWithMarkdownBold(children)}</div>;
 }
 
 export function SectionLabel({ icon, children }: { icon?: ReactNode; children: ReactNode }) {

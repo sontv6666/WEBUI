@@ -1131,6 +1131,29 @@ body {
   background: linear-gradient(90deg, rgba(13, 148, 136, 0.14) 0%, var(--bg-subtle) 42%);
 }
 
+.team-card-aggregate-rubric {
+  margin-top: 12px;
+}
+
+.criteria-box.criteria-aggregate-rubric {
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(90deg, var(--accent-soft) 0%, var(--bg-subtle) 40%);
+}
+
+.criteria-box.criteria-aggregate-rubric--r2 {
+  border-left-color: #0d9488;
+  background: linear-gradient(90deg, rgba(13, 148, 136, 0.14) 0%, var(--bg-subtle) 42%);
+}
+
+.criteria-box.smb-scale-advisory-panel {
+  border-left: 3px solid #6366f1;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.12) 0%, var(--bg-subtle) 40%);
+}
+
+.smb-scale-advisory-panel__row {
+  margin-top: 12px;
+}
+
 .criteria-box {
   margin-top: 14px;
   padding: 14px 16px;

@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CriteriaComments, ReviewItem, TeamLatestReview } from "../types/reviews";
+import type { ReviewItem, TeamLatestReview } from "../types/reviews";
 import {
   extractBatchReviewMeta,
-  extractCriteriaComments,
   extractOverallPicture,
   formatBatchReviewDisplayValue,
   formatBatchedShaPreview,
   formatStatusLabel,
+  reviewKindOf,
   shouldShowReviewStatusBadge,
   shortSha,
   toAbsoluteTime,
   toRelativeTime,
 } from "../types/reviews";
 import { computePageCount, PaginationBar, slicePage } from "./Pagination";
-import { MetaChips, ProjectToolsPanels, ProsePre, SectionLabel } from "./Presentation";
+import { MetaChips, ProjectToolsPanels } from "./Presentation";
+import { SmbScaleAdvisoryPanel, TeamAggregateCriteriaSections } from "./RubricAndAdvisoryPanels";
 
 const TEAMS_PAGE_SIZE = 6;
 
@@ -92,6 +93,7 @@ export function TeamsTable({
             const latestBatchMeta = extractBatchReviewMeta(latestByTime?.structured_output ?? null);
             const latestBatchValue = formatBatchReviewDisplayValue(latestBatchMeta);
             const latestBatchShas = formatBatchedShaPreview(latestBatchMeta.batchedCommitShas);
+            const aggregateRow = teamCommits.find((c) => reviewKindOf(c) === "team_aggregate") ?? null;
             const teamMetaChips: Array<{ label: string; value: string }> = [
               { label: "Repo", value: team.repo_name || "—" },
               { label: "Commit mới nhất", value: shortSha(team.commit_sha || null) },
@@ -131,6 +133,14 @@ export function TeamsTable({
                 ) : null}
                 <p className="team-summary">{team.push_summary || "Chưa có tóm tắt AI."}</p>
 
+                {aggregateRow ? (
+                  <div className="team-card-aggregate-rubric" onClick={(e) => e.stopPropagation()}>
+                    <p className="system-snapshot-hint">Tiêu chí &amp; gợi ý (tổng hợp đội)</p>
+                    <TeamAggregateCriteriaSections structuredOutput={aggregateRow.structured_output} />
+                    <SmbScaleAdvisoryPanel structuredOutput={aggregateRow.structured_output} />
+                  </div>
+                ) : null}
+
                 <details
                   className="team-commits-details"
                   open
@@ -139,8 +149,12 @@ export function TeamsTable({
                 >
                   <summary>Các lần push đã nhận xét</summary>
                   <div className="team-commits-list">
-                    {teamCommits.length === 0 && <p className="state">Chưa có bản ghi per-push cho đội này.</p>}
-                    {teamCommits.map((commit) => {
+                    {teamCommits.filter((c) => reviewKindOf(c) !== "team_aggregate").length === 0 && (
+                      <p className="state">Chưa có bản ghi per-push cho đội này.</p>
+                    )}
+                    {teamCommits
+                      .filter((c) => reviewKindOf(c) !== "team_aggregate")
+                      .map((commit) => {
                       const op = extractOverallPicture(commit.structured_output);
                       const batchMeta = extractBatchReviewMeta(commit.structured_output);
                       const batchValue = formatBatchReviewDisplayValue(batchMeta);
@@ -165,7 +179,6 @@ export function TeamsTable({
                           <MetaChips items={commitChips} />
                           <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
                           <p>{commit.push_summary || "Không có tóm tắt."}</p>
-                          <CriteriaCommentsBlock structuredOutput={commit.structured_output} />
                         </div>
                       );
                     })}
@@ -195,62 +208,5 @@ export function TeamsTable({
         />
       )}
     </>
-  );
-}
-
-const R1_TABLE_LABELS: Array<{ key: keyof CriteriaComments; short: string }> = [
-  { key: "R1_01", short: "R1_01 · Domain fit" },
-  { key: "R1_02", short: "R1_02 · Data pipeline" },
-  { key: "R1_03", short: "R1_03 · Retrieval" },
-  { key: "R1_04", short: "R1_04 · Intent & prompting" },
-  { key: "R1_05", short: "R1_05 · Slide & trình bày" },
-];
-
-const R2_TABLE_LABELS: Array<{ key: keyof CriteriaComments; short: string }> = [
-  { key: "R2_01", short: "R2_01 · Agent & multi-hop (25%)" },
-  { key: "R2_02", short: "R2_02 · Tài nguyên model (25%)" },
-  { key: "R2_03", short: "R2_03 · Thực tế vận hành (15%)" },
-  { key: "R2_04", short: "R2_04 · Mở rộng & sáng tạo (15%)" },
-  { key: "R2_05", short: "R2_05 · Phản biện BGK (20%)" },
-];
-
-function CriteriaCommentsBlock({ structuredOutput }: { structuredOutput: Record<string, unknown> | null }) {
-  const criteria = extractCriteriaComments(structuredOutput);
-  if (!criteria) return null;
-
-  const r1Lines = R1_TABLE_LABELS.map(({ key, short }) => [short, criteria[key] as string | undefined] as const).filter(
-    ([, value]) => Boolean(value)
-  );
-  const r2Lines = R2_TABLE_LABELS.map(({ key, short }) => [short, criteria[key] as string | undefined] as const).filter(
-    ([, value]) => Boolean(value)
-  );
-
-  if (r1Lines.length === 0 && r2Lines.length === 0) return null;
-
-  return (
-    <div className="criteria-rubric-stack" style={{ marginTop: 12 }}>
-      {r1Lines.length > 0 ? (
-        <div className="criteria-box criteria-per-push">
-          <SectionLabel icon="¶">Tiêu chí R1 — push này</SectionLabel>
-          {r1Lines.map(([label, value]) => (
-            <div key={label} style={{ marginTop: 8 }}>
-              <span className="criteria-item-label">{label}</span>
-              <ProsePre>{value}</ProsePre>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {r2Lines.length > 0 ? (
-        <div className="criteria-box criteria-per-push criteria-per-push--r2">
-          <SectionLabel icon="¶">Tiêu chí R2 — push này</SectionLabel>
-          {r2Lines.map(([label, value]) => (
-            <div key={label} style={{ marginTop: 8 }}>
-              <span className="criteria-item-label">{label}</span>
-              <ProsePre>{value}</ProsePre>
-            </div>
-          ))}
-        </div>
-      ) : null}
-    </div>
   );
 }

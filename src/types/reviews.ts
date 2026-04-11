@@ -53,14 +53,58 @@ export type CriteriaComments = {
   R2_05?: string;
 };
 
+function unwrapStructuredRoot(structuredOutput: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!structuredOutput) return null;
+  if (
+    structuredOutput.inventory_exhaustive != null ||
+    structuredOutput.assessment != null ||
+    structuredOutput.suggested_test_cases != null ||
+    structuredOutput.suggested_questions_for_team != null ||
+    structuredOutput.suggested_prompt_refinement != null ||
+    structuredOutput.criteria_comments != null ||
+    structuredOutput.smb_scale_advisory != null
+  ) {
+    return structuredOutput;
+  }
+  const nested = structuredOutput.output;
+  if (nested && typeof nested === "object") return nested as Record<string, unknown>;
+  return structuredOutput;
+}
+
 export function extractCriteriaComments(structuredOutput: Record<string, unknown> | null): CriteriaComments | null {
   if (!structuredOutput) return null;
-  let value = structuredOutput.criteria_comments;
-  if ((!value || typeof value !== "object") && structuredOutput.output && typeof structuredOutput.output === "object") {
-    value = (structuredOutput.output as Record<string, unknown>).criteria_comments;
-  }
-  if (!value || typeof value !== "object") return null;
-  return value as CriteriaComments;
+  const fromObj = (obj: Record<string, unknown> | null | undefined): CriteriaComments | null => {
+    const v = obj?.criteria_comments;
+    if (v && typeof v === "object") return v as CriteriaComments;
+    return null;
+  };
+  return (
+    fromObj(structuredOutput) ??
+    fromObj(structuredOutput.output && typeof structuredOutput.output === "object" ? (structuredOutput.output as Record<string, unknown>) : undefined) ??
+    fromObj(unwrapStructuredRoot(structuredOutput))
+  );
+}
+
+/** Gợi ý cải tiến cấp đội (aggregate): SMB, quy mô, throughput — từ LLM `smb_scale_advisory`. */
+export type SmbScaleAdvisory = {
+  summary?: string;
+  tech_and_architecture?: string;
+  cost_for_smb?: string;
+  throughput_and_reliability?: string;
+};
+
+export function extractSmbScaleAdvisory(structuredOutput: Record<string, unknown> | null): SmbScaleAdvisory | null {
+  if (!structuredOutput) return null;
+  const fromObj = (obj: Record<string, unknown> | null | undefined): SmbScaleAdvisory | null => {
+    const v = obj?.smb_scale_advisory;
+    if (v && typeof v === "object") return v as SmbScaleAdvisory;
+    return null;
+  };
+  return (
+    fromObj(structuredOutput) ??
+    fromObj(structuredOutput.output && typeof structuredOutput.output === "object" ? (structuredOutput.output as Record<string, unknown>) : undefined) ??
+    fromObj(unwrapStructuredRoot(structuredOutput))
+  );
 }
 
 /** Fields from LLM `overall_picture` (per-push & aggregate). */
@@ -85,22 +129,6 @@ export function extractOverallPicture(structuredOutput: Record<string, unknown> 
     if (op && typeof op === "object") return op as OverallPicture;
   }
   return null;
-}
-
-function unwrapStructuredRoot(structuredOutput: Record<string, unknown> | null): Record<string, unknown> | null {
-  if (!structuredOutput) return null;
-  if (
-    structuredOutput.inventory_exhaustive != null ||
-    structuredOutput.assessment != null ||
-    structuredOutput.suggested_test_cases != null ||
-    structuredOutput.suggested_questions_for_team != null ||
-    structuredOutput.suggested_prompt_refinement != null
-  ) {
-    return structuredOutput;
-  }
-  const nested = structuredOutput.output;
-  if (nested && typeof nested === "object") return nested as Record<string, unknown>;
-  return structuredOutput;
 }
 
 export type InventoryExhaustive = {
