@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/reviews";
+import type { AssessmentBlock, CriteriaComments, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
   buildSkeletonTestCasesFromInventory,
   extractAssessment,
   extractBatchReviewMeta,
+  extractCriteriaComments,
   hasAggregateRubricContent,
   hasSmbAdvisoryContent,
   extractInventoryExhaustive,
@@ -30,6 +31,45 @@ import { SmbScaleAdvisoryPanel, TeamAggregateCriteriaSections } from "./RubricAn
 
 const PUSH_LIST_PAGE_SIZE = 5;
 
+/** Neo cuộn cho mục lục trang chi tiết đội (khối tổng hợp đội) */
+export const AGGREGATE_SECTION_IDS = {
+  historical: "aggregate-section-historical",
+  evolution: "aggregate-section-evolution",
+  inventory: "aggregate-section-inventory",
+  rag: "aggregate-section-rag",
+  assessment: "aggregate-section-assessment",
+  r1: "aggregate-section-r1",
+  r2: "aggregate-section-r2",
+  smb: "aggregate-section-smb",
+  prompt: "aggregate-section-prompt",
+  tests: "aggregate-section-tests",
+  questions: "aggregate-section-questions",
+} as const;
+
+const R1_CRITERIA_KEYS: (keyof CriteriaComments)[] = ["R1_01", "R1_02", "R1_03", "R1_04", "R1_05"];
+const R2_CRITERIA_KEYS: (keyof CriteriaComments)[] = ["R2_01", "R2_02", "R2_03", "R2_04", "R2_05"];
+
+function criteriaHasAnyKey(c: CriteriaComments | null, keys: (keyof CriteriaComments)[]): boolean {
+  if (!c) return false;
+  return keys.some((k) => String(c[k] ?? "").trim().length > 0);
+}
+
+function shouldShowAggregateRagInNav(
+  structuredOutput: Record<string, unknown> | null,
+  columnRagLevel: string | null | undefined
+): boolean {
+  const rm = extractRagMaturity(structuredOutput);
+  const col = (columnRagLevel && columnRagLevel.trim()) || "";
+  const fromStruct = (rm?.level && rm.level.trim()) || "";
+  const features = rm?.features_detected ?? [];
+  if (features.length > 0) return true;
+  if (features.length === 0) {
+    if (!fromStruct) return false;
+    if (fromStruct === col) return false;
+  }
+  return true;
+}
+
 const INVENTORY_LABELS: Array<{ key: keyof InventoryExhaustive; label: string }> = [
   { key: "llm_models_and_apis", label: "LLM / API" },
   { key: "frameworks_and_runtimes", label: "Framework & runtime" },
@@ -47,6 +87,56 @@ const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = 
   { key: "completeness", label: "Độ hoàn thiện" },
   { key: "security", label: "Bảo mật" },
 ];
+
+function hasAssessmentForNav(structuredOutput: Record<string, unknown> | null): boolean {
+  const assessment = extractAssessment(structuredOutput);
+  if (!assessment) return false;
+  return ASSESSMENT_LABELS.some(({ key }) => Boolean((assessment[key] as string | undefined)?.trim()));
+}
+
+/** Mục lục neo (chỉ mục có nội dung tương ứng trong bản tổng hợp đội). */
+export function getAggregateNavEntries(rows: ReviewItem[]): Array<{ id: string; label: string }> {
+  const aggregateRow = pickLatestAggregate(rows);
+  if (!aggregateRow) return [];
+  const so = aggregateRow.structured_output;
+  const ctx = getExtendedLlmContext(so);
+  const op = extractOverallPicture(so);
+  const items: Array<{ id: string; label: string }> = [];
+
+  const hist = typeof op?.historical_synthesis === "string" ? op.historical_synthesis.trim() : "";
+  const evo = typeof op?.evolution_notes === "string" ? op.evolution_notes.trim() : "";
+  if (hist) items.push({ id: AGGREGATE_SECTION_IDS.historical, label: "Tổng hợp lịch sử" });
+  if (evo) items.push({ id: AGGREGATE_SECTION_IDS.evolution, label: "Tiến hóa qua các lần push" });
+  if (ctx.hasInventory) {
+    items.push({ id: AGGREGATE_SECTION_IDS.inventory, label: "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" });
+  }
+  if (shouldShowAggregateRagInNav(so, aggregateRow.rag_level)) {
+    items.push({ id: AGGREGATE_SECTION_IDS.rag, label: "RAG — mức độ và tính năng (từ LLM)" });
+  }
+  if (hasAssessmentForNav(so)) {
+    items.push({ id: AGGREGATE_SECTION_IDS.assessment, label: "Đánh giá (cấp đội / toàn hệ thống)" });
+  }
+  const criteria = extractCriteriaComments(so);
+  if (criteriaHasAnyKey(criteria, R1_CRITERIA_KEYS)) {
+    items.push({ id: AGGREGATE_SECTION_IDS.r1, label: "Tiêu chí R1 — toàn hệ thống" });
+  }
+  if (criteriaHasAnyKey(criteria, R2_CRITERIA_KEYS)) {
+    items.push({ id: AGGREGATE_SECTION_IDS.r2, label: "Tiêu chí R2 — toàn hệ thống" });
+  }
+  if (hasSmbAdvisoryContent(so)) {
+    items.push({ id: AGGREGATE_SECTION_IDS.smb, label: "Gợi ý cải tiến (SMB & quy mô)" });
+  }
+  if (ctx.promptHint) {
+    items.push({ id: AGGREGATE_SECTION_IDS.prompt, label: "Gợi ý tối ưu prompt — nên chỉnh gì" });
+  }
+  if (ctx.hasAiTests || ctx.hasSkeletonTests) {
+    items.push({ id: AGGREGATE_SECTION_IDS.tests, label: "Test case — toàn hệ thống" });
+  }
+  if (ctx.hasQuestions) {
+    items.push({ id: AGGREGATE_SECTION_IDS.questions, label: "Câu hỏi — cấp đội / toàn hệ thống" });
+  }
+  return items;
+}
 
 type ExtendedLlmContext = {
   inv: InventoryExhaustive | null;
@@ -90,13 +180,13 @@ function getExtendedLlmContext(structuredOutput: Record<string, unknown> | null)
   };
 }
 
-function renderInventorySectionFromCtx(ctx: ExtendedLlmContext, scope: "push" | "team") {
+function renderInventorySectionFromCtx(ctx: ExtendedLlmContext, scope: "push" | "team", anchorId?: string) {
   if (!ctx.hasInventory || !ctx.inv) return null;
   const inv = ctx.inv;
   const invTitle =
     scope === "team" ? "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" : "Danh mục công nghệ (liệt kê đầy đủ)";
   return (
-    <div className="criteria-box llm-extended-block">
+    <div className="criteria-box llm-extended-block aggregate-section-target" id={anchorId}>
       <div className="llm-section-chunk">
         <SectionLabel icon="▤">{invTitle}</SectionLabel>
         <div className="inventory-grid">
@@ -120,10 +210,10 @@ function renderInventorySectionFromCtx(ctx: ExtendedLlmContext, scope: "push" | 
   );
 }
 
-function renderPromptRefinementFromCtx(ctx: ExtendedLlmContext) {
+function renderPromptRefinementFromCtx(ctx: ExtendedLlmContext, anchorId?: string) {
   if (!ctx.promptHint) return null;
   return (
-    <div className="criteria-box prompt-refine-panel">
+    <div className="criteria-box prompt-refine-panel aggregate-section-target" id={anchorId}>
       <SectionLabel icon="→">Gợi ý tối ưu prompt — nên chỉnh gì</SectionLabel>
       <p className="prompt-refine-panel__hint">
         Chỉ liệt kê hạng mục cần tối ưu (LLM được hướng dẫn trả gạch đầu dòng ngắn); tránh sao chép cả prompt dài.
@@ -195,7 +285,6 @@ export function TeamDetail({
   const aggregateRow = useMemo(() => pickLatestAggregate(rows), [rows]);
   const perPushRows = useMemo(() => rows.filter(isPerPushReview), [rows]);
   const latestPerPush = useMemo(() => pickLatestPerPush(perPushRows), [perPushRows]);
-  const latestPerPushKey = latestPerPush ? pushCardKey(latestPerPush) : null;
 
   const identity = resolveTeamIdentity(perPushRows, aggregateRow);
   const hasIdentity = Boolean(identity.project_about || identity.tools_plain_bullets);
@@ -213,8 +302,8 @@ export function TeamDetail({
     if (pushPage > pushPageCount) setPushPage(pushPageCount);
   }, [pushPage, pushPageCount]);
 
-  const isPushDetailExpanded = (key: string) =>
-    pushDetailOpen[key] !== undefined ? pushDetailOpen[key] : key === latestPerPushKey;
+  /** Trang chi tiết: mặc định thu gọn mọi push (chỉ mở khi người dùng bấm). */
+  const isPushDetailExpanded = (key: string) => pushDetailOpen[key] ?? false;
 
   const expandAllPushDetailsOnPage = useCallback(() => {
     setPushDetailOpen((prev) => {
@@ -366,15 +455,19 @@ export function TeamDetail({
               const ctx = getExtendedLlmContext(so);
               return (
                 <>
-                  {renderHistoricalSynthesis(so)}
-                  {renderInventorySectionFromCtx(ctx, "team")}
-                  {renderRagMaturityPanel(so, aggregateRow.rag_level)}
-                  {renderAssessmentBlock(so, "team")}
-                  <TeamAggregateCriteriaSections structuredOutput={so} />
-                  <SmbScaleAdvisoryPanel structuredOutput={so} />
-                  {renderPromptRefinementFromCtx(ctx)}
-                  {renderTestCasesPanel(ctx, "team", "aggregate")}
-                  {renderQuestionsPanel(ctx, "team", "aggregate")}
+                  {renderHistoricalSynthesis(so, AGGREGATE_SECTION_IDS.historical, AGGREGATE_SECTION_IDS.evolution)}
+                  {renderInventorySectionFromCtx(ctx, "team", AGGREGATE_SECTION_IDS.inventory)}
+                  {renderRagMaturityPanel(so, aggregateRow.rag_level, AGGREGATE_SECTION_IDS.rag)}
+                  {renderAssessmentBlock(so, "team", AGGREGATE_SECTION_IDS.assessment)}
+                  <TeamAggregateCriteriaSections
+                    structuredOutput={so}
+                    anchorIdR1={AGGREGATE_SECTION_IDS.r1}
+                    anchorIdR2={AGGREGATE_SECTION_IDS.r2}
+                  />
+                  <SmbScaleAdvisoryPanel structuredOutput={so} anchorId={AGGREGATE_SECTION_IDS.smb} />
+                  {renderPromptRefinementFromCtx(ctx, AGGREGATE_SECTION_IDS.prompt)}
+                  {renderTestCasesPanel(ctx, "team", "aggregate", AGGREGATE_SECTION_IDS.tests)}
+                  {renderQuestionsPanel(ctx, "team", "aggregate", AGGREGATE_SECTION_IDS.questions)}
                   {renderAggregateRubricAdvisoryPlaceholder(so)}
                 </>
               );
@@ -586,7 +679,8 @@ function renderAggregateRubricAdvisoryPlaceholder(structuredOutput: Record<strin
 
 function renderRagMaturityPanel(
   structuredOutput: Record<string, unknown> | null,
-  columnRagLevel: string | null | undefined
+  columnRagLevel: string | null | undefined,
+  anchorDomId?: string
 ) {
   const rm = extractRagMaturity(structuredOutput);
   const col = (columnRagLevel && columnRagLevel.trim()) || "";
@@ -601,7 +695,11 @@ function renderRagMaturityPanel(
   const levelLine = fromStruct || col || null;
 
   return (
-    <div className="criteria-box rag-maturity-panel" aria-label="Mức RAG và tính năng phát hiện">
+    <div
+      className="criteria-box rag-maturity-panel aggregate-section-target"
+      id={anchorDomId}
+      aria-label="Mức RAG và tính năng phát hiện"
+    >
       <SectionLabel icon="△">RAG — mức độ và tính năng (từ LLM)</SectionLabel>
       {levelLine ? (
         <p className="rag-maturity-panel__level">
@@ -619,7 +717,11 @@ function renderRagMaturityPanel(
   );
 }
 
-function renderAssessmentBlock(structuredOutput: Record<string, unknown> | null, scope: "push" | "team") {
+function renderAssessmentBlock(
+  structuredOutput: Record<string, unknown> | null,
+  scope: "push" | "team",
+  anchorDomId?: string
+) {
   const assessment = extractAssessment(structuredOutput);
   if (!assessment) return null;
   const hasAny = ASSESSMENT_LABELS.some(({ key }) => Boolean((assessment[key] as string | undefined)?.trim()));
@@ -627,7 +729,7 @@ function renderAssessmentBlock(structuredOutput: Record<string, unknown> | null,
   const title =
     scope === "team" ? "Đánh giá (cấp đội / toàn hệ thống)" : "Đánh giá chi tiết (assessment)";
   return (
-    <div className="criteria-box llm-extended-block assessment-always-visible">
+    <div className="criteria-box llm-extended-block assessment-always-visible aggregate-section-target" id={anchorDomId}>
       <div className="llm-section-chunk">
         <SectionLabel icon="◎">{title}</SectionLabel>
         {ASSESSMENT_LABELS.map(({ key, label }) => {
@@ -666,7 +768,12 @@ function CopyTextButton({ text, children }: { text: string; children: ReactNode 
   );
 }
 
-function renderTestCasesPanel(ctx: ExtendedLlmContext, scope: "push" | "team", panelIdSuffix: string) {
+function renderTestCasesPanel(
+  ctx: ExtendedLlmContext,
+  scope: "push" | "team",
+  panelIdSuffix: string,
+  scrollAnchorId?: string
+) {
   if (!ctx.hasAiTests && !ctx.hasSkeletonTests) return null;
   const aiTests = ctx.aiTests;
   const skeletonTests = ctx.skeletonTests;
@@ -676,7 +783,11 @@ function renderTestCasesPanel(ctx: ExtendedLlmContext, scope: "push" | "team", p
       : "Theo stack đội; có thể bổ sung khung khi AI chưa trả đủ.";
   const testsHeadingId = `review-panel-tests-heading-${panelIdSuffix}`;
   return (
-    <section className="review-panel review-panel--tests" aria-labelledby={testsHeadingId}>
+    <section
+      className="review-panel review-panel--tests aggregate-section-target"
+      id={scrollAnchorId}
+      aria-labelledby={testsHeadingId}
+    >
       <header className="review-panel__head">
         <div>
           <h4 id={testsHeadingId} className="review-panel__title">
@@ -727,7 +838,12 @@ function renderTestCasesPanel(ctx: ExtendedLlmContext, scope: "push" | "team", p
   );
 }
 
-function renderQuestionsPanel(ctx: ExtendedLlmContext, scope: "push" | "team", panelIdSuffix: string) {
+function renderQuestionsPanel(
+  ctx: ExtendedLlmContext,
+  scope: "push" | "team",
+  panelIdSuffix: string,
+  scrollAnchorId?: string
+) {
   if (!ctx.hasQuestions || !ctx.questions) return null;
   const questions = ctx.questions;
   const questionsSubtitle =
@@ -736,7 +852,11 @@ function renderQuestionsPanel(ctx: ExtendedLlmContext, scope: "push" | "team", p
       : "Gợi ý khi demo hoặc chấm.";
   const questionsHeadingId = `review-panel-questions-heading-${panelIdSuffix}`;
   return (
-    <section className="review-panel review-panel--questions" aria-labelledby={questionsHeadingId}>
+    <section
+      className="review-panel review-panel--questions aggregate-section-target"
+      id={scrollAnchorId}
+      aria-labelledby={questionsHeadingId}
+    >
       <header className="review-panel__head">
         <div>
           <h4 id={questionsHeadingId} className="review-panel__title">
@@ -790,7 +910,11 @@ function renderExtendedLlmSections(
   );
 }
 
-function renderHistoricalSynthesis(structuredOutput: Record<string, unknown> | null) {
+function renderHistoricalSynthesis(
+  structuredOutput: Record<string, unknown> | null,
+  anchorHistoricalId?: string,
+  anchorEvolutionId?: string
+) {
   const op = extractOverallPicture(structuredOutput);
   if (!op) return null;
   const hist = op.historical_synthesis;
@@ -800,13 +924,13 @@ function renderHistoricalSynthesis(structuredOutput: Record<string, unknown> | n
   return (
     <div className="criteria-box">
       {typeof hist === "string" && hist ? (
-        <div style={{ marginBottom: evo ? 14 : 0 }}>
+        <div className="aggregate-section-target" id={anchorHistoricalId} style={{ marginBottom: evo ? 14 : 0 }}>
           <SectionLabel icon="▣">Tổng hợp lịch sử</SectionLabel>
           <ProsePre>{hist}</ProsePre>
         </div>
       ) : null}
       {typeof evo === "string" && evo ? (
-        <div>
+        <div className="aggregate-section-target" id={anchorEvolutionId}>
           <SectionLabel icon="↻">Tiến hóa qua các lần push</SectionLabel>
           <ProsePre>{evo}</ProsePre>
         </div>

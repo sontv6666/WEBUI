@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { computePageCount, PaginationBar, slicePage } from "./components/Pagination";
-import { TeamDetail } from "./components/TeamDetail";
+import { getAggregateNavEntries, TeamDetail } from "./components/TeamDetail";
 import { AllTeamsGrid } from "./components/AllTeamsGrid";
 import { TeamsTable } from "./components/TeamsTable";
 import { MetaChips, Skeleton } from "./components/Presentation";
@@ -459,6 +459,12 @@ function TeamCommitPage({
     navigate(`/teams/${encodeURIComponent(newTeamId)}`);
   };
 
+  const aggregateNavItems = useMemo(() => getAggregateNavEntries(teamFeed), [teamFeed]);
+
+  const scrollToAggregateSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   return (
     <section className="panel page-panel page-panel--detail">
       <nav className="back-nav" aria-label="Quay lại danh sách">
@@ -474,14 +480,38 @@ function TeamCommitPage({
       <div className="panel-head panel-head--detail">
         <h2 className="panel-title">Chi tiết đội &amp; hệ thống</h2>
       </div>
-      <TeamDetail
-        teamId={selectedTeam}
-        teams={teamOptions}
-        onTeamChange={handleTeamChange}
-        onOpenTeam={onOpenTeam}
-        rows={teamFeed}
-        loading={loadingTeam}
-      />
+      <div
+        className={`team-detail-page-layout${aggregateNavItems.length > 0 ? " team-detail-page-layout--with-toc" : ""}`}
+      >
+        {aggregateNavItems.length > 0 ? (
+          <nav className="team-detail-toc" aria-label="Mục lục đánh giá toàn hệ thống">
+            <p className="team-detail-toc__title">Mục lục</p>
+            <ul className="team-detail-toc__list">
+              {aggregateNavItems.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className="team-detail-toc__link"
+                    onClick={() => scrollToAggregateSection(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ) : null}
+        <div className="team-detail-page-main">
+          <TeamDetail
+            teamId={selectedTeam}
+            teams={teamOptions}
+            onTeamChange={handleTeamChange}
+            onOpenTeam={onOpenTeam}
+            rows={teamFeed}
+            loading={loadingTeam}
+          />
+        </div>
+      </div>
     </section>
   );
 }
