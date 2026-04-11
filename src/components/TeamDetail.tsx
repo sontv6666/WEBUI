@@ -204,6 +204,7 @@ const INVENTORY_LABELS: Array<{ key: keyof InventoryExhaustive; label: string }>
 const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = [
   { key: "advantages", label: "Ưu điểm" },
   { key: "disadvantages", label: "Khuyết điểm" },
+  { key: "improvement_areas", label: "Điểm cần cải thiện" },
   { key: "context_and_fit", label: "Ngữ cảnh & đề bài" },
   { key: "source_structure", label: "Cấu trúc source" },
   { key: "completeness", label: "Độ hoàn thiện" },
@@ -277,9 +278,9 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
       ) : null}
       {hasAssessment && assessment ? (
         <div style={{ marginBottom: 14 }}>
-          <SectionLabel icon="◎">Đánh giá (ưu / khuyết · ngữ cảnh · cấu trúc · hoàn thiện · bảo mật)</SectionLabel>
+          <SectionLabel icon="◎">Đánh giá (ưu / khuyết / cải thiện · ngữ cảnh · cấu trúc · hoàn thiện · bảo mật)</SectionLabel>
           <p className="llm-block-hint">
-            Sáu khối dưới đây tương ứng: Ưu điểm, Khuyết điểm, Ngữ cảnh, Cấu trúc source, Độ hoàn thiện, Bảo mật — do AI trích từ diff/review.
+            Bảy khối: Ưu điểm, Khuyết điểm, Điểm cần cải thiện (ưu tiên hành động), Ngữ cảnh, Cấu trúc source, Độ hoàn thiện, Bảo mật — do AI trích từ diff/review.
           </p>
           {ASSESSMENT_LABELS.map(({ key, label }) => {
             const text = (assessment[key] as string | undefined)?.trim();

@@ -94,6 +94,8 @@ export type InventoryExhaustive = {
 export type AssessmentBlock = {
   advantages?: string;
   disadvantages?: string;
+  /** Ưu tiên cải tiến / backlog ngắn (tách khỏi khuyết điểm tổng quan). */
+  improvement_areas?: string;
   context_and_fit?: string;
   source_structure?: string;
   completeness?: string;
