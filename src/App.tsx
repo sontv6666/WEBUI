@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { computePageCount, PaginationBar, slicePage } from "./components/Pagination";
 import { TeamDetail } from "./components/TeamDetail";
+import { AllTeamsGrid } from "./components/AllTeamsGrid";
 import { TeamsTable } from "./components/TeamsTable";
 import { MetaChips, Skeleton } from "./components/Presentation";
 import { GLOBAL_FEED_QUERY_LIMIT, useReviewsData } from "./hooks/useReviewsData";
@@ -92,8 +93,11 @@ export default function App() {
           <h1>Hackathon Review</h1>
         </div>
         <nav className="nav">
-          <NavLink to="/teams" className={({ isActive }) => (isActive ? "active" : undefined)}>
+          <NavLink to="/teams" end className={({ isActive }) => (isActive ? "active" : undefined)}>
             Đội thi
+          </NavLink>
+          <NavLink to="/teams/all" className={({ isActive }) => (isActive ? "active" : undefined)}>
+            Tất cả đội
           </NavLink>
           <NavLink to="/" className={({ isActive }) => (isActive ? "active" : undefined)} end>
             Timeline
@@ -206,11 +210,39 @@ export default function App() {
           }
         />
         <Route
+          path="/teams/all"
+          element={
+            <section className="panel page-panel">
+              <div className="team-header team-header--with-link">
+                <div className="team-header__titles">
+                  <h2 className="panel-title">Tất cả đội</h2>
+                  <p className="team-panel-subtitle">
+                    Lưới gọn theo từng đội; mở rộng chi tiết hoặc vào trang commit.
+                  </p>
+                </div>
+                <Link className="link-button" to="/teams">
+                  ← Bảng đội
+                </Link>
+              </div>
+              <AllTeamsGrid
+                latestRows={latestTeams}
+                commits={globalFeed}
+                loading={loadingLatest || loadingGlobal}
+              />
+            </section>
+          }
+        />
+        <Route
           path="/teams"
           element={
             <section className="panel page-panel">
-              <div className="team-header">
-                <h2 className="panel-title">Bảng đội</h2>
+              <div className="team-header team-header--with-link">
+                <div className="team-header__row">
+                  <h2 className="panel-title">Bảng đội</h2>
+                  <Link className="link-button link-button--accent" to="/teams/all">
+                    Tất cả đội (lưới) →
+                  </Link>
+                </div>
                 <select
                   value={
                     teamOptions.some((t) => t.teamId === selectedTeam)
