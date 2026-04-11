@@ -4,6 +4,8 @@ import {
   buildSkeletonTestCasesFromInventory,
   extractAssessment,
   extractBatchReviewMeta,
+  hasAggregateRubricContent,
+  hasSmbAdvisoryContent,
   extractInventoryExhaustive,
   extractOverallPicture,
   extractPromptRefinement,
@@ -254,6 +256,7 @@ export function TeamDetail({
           <div className="push-core-review-block push-core-review-block--aggregate">
             {renderRagMaturityPanel(aggregateRow.structured_output, aggregateRow.rag_level)}
             {renderAssessmentBlock(aggregateRow.structured_output, "team")}
+            {renderAggregateRubricAdvisoryPlaceholder(aggregateRow.structured_output)}
             <TeamAggregateCriteriaSections structuredOutput={aggregateRow.structured_output} />
             <SmbScaleAdvisoryPanel structuredOutput={aggregateRow.structured_output} />
           </div>
@@ -427,6 +430,22 @@ const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = 
   { key: "completeness", label: "Độ hoàn thiện" },
   { key: "security", label: "Bảo mật" },
 ];
+
+function renderAggregateRubricAdvisoryPlaceholder(structuredOutput: Record<string, unknown> | null) {
+  const hasR = hasAggregateRubricContent(structuredOutput);
+  const hasS = hasSmbAdvisoryContent(structuredOutput);
+  if (hasR && hasS) return null;
+  const parts: string[] = [];
+  if (!hasR) parts.push("tiêu chí R1/R2 (criteria_comments)");
+  if (!hasS) parts.push("gợi ý SMB & quy mô (smb_scale_advisory)");
+  return (
+    <p className="state state--muted aggregate-extras-placeholder" role="status">
+      Chưa có {parts.join(" hoặc ")} trong bản ghi tổng hợp này — mở <strong>Structured output — tổng hợp đội (JSON)</strong>{" "}
+      bên dưới để kiểm tra; nếu thiếu key hoặc chuỗi rỗng, import workflow n8n đã cập nhật schema và{" "}
+      <strong>chạy lại</strong> luồng tổng hợp đội.
+    </p>
+  );
+}
 
 function renderRagMaturityPanel(
   structuredOutput: Record<string, unknown> | null,

@@ -91,7 +91,22 @@ export type SmbScaleAdvisory = {
   tech_and_architecture?: string;
   cost_for_smb?: string;
   throughput_and_reliability?: string;
+  observability_and_operations?: string;
+  data_and_integrations?: string;
 };
+
+const CRITERIA_RUBRIC_KEYS: (keyof CriteriaComments)[] = [
+  "R1_01",
+  "R1_02",
+  "R1_03",
+  "R1_04",
+  "R1_05",
+  "R2_01",
+  "R2_02",
+  "R2_03",
+  "R2_04",
+  "R2_05",
+];
 
 export function extractSmbScaleAdvisory(structuredOutput: Record<string, unknown> | null): SmbScaleAdvisory | null {
   if (!structuredOutput) return null;
@@ -105,6 +120,29 @@ export function extractSmbScaleAdvisory(structuredOutput: Record<string, unknown
     fromObj(structuredOutput.output && typeof structuredOutput.output === "object" ? (structuredOutput.output as Record<string, unknown>) : undefined) ??
     fromObj(unwrapStructuredRoot(structuredOutput))
   );
+}
+
+const SMB_ADVISORY_FIELD_KEYS: (keyof SmbScaleAdvisory)[] = [
+  "summary",
+  "tech_and_architecture",
+  "cost_for_smb",
+  "throughput_and_reliability",
+  "observability_and_operations",
+  "data_and_integrations",
+];
+
+/** Có ít nhất một tiêu chí R1/R2 không rỗng trong structured_output (aggregate). */
+export function hasAggregateRubricContent(structuredOutput: Record<string, unknown> | null): boolean {
+  const c = extractCriteriaComments(structuredOutput);
+  if (!c) return false;
+  return CRITERIA_RUBRIC_KEYS.some((k) => String(c[k] ?? "").trim().length > 0);
+}
+
+/** Có ít nhất một trường smb_scale_advisory không rỗng. */
+export function hasSmbAdvisoryContent(structuredOutput: Record<string, unknown> | null): boolean {
+  const a = extractSmbScaleAdvisory(structuredOutput);
+  if (!a) return false;
+  return SMB_ADVISORY_FIELD_KEYS.some((k) => String(a[k] ?? "").trim().length > 0);
 }
 
 /** Fields from LLM `overall_picture` (per-push & aggregate). */

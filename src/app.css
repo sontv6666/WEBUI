@@ -708,6 +708,12 @@ body {
   font-weight: 700;
 }
 
+.aggregate-extras-placeholder {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* R1 + assessment + rag_maturity: luôn hiển thị (không nằm trong vùng bị ẩn khi thu gọn panel / chưa mở chi tiết push). */
 .push-core-review-block {
   display: flex;

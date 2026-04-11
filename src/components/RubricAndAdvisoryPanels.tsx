@@ -62,6 +62,8 @@ const SMB_ADVISORY_ROWS: Array<{ field: keyof SmbScaleAdvisory; label: string }>
   { field: "tech_and_architecture", label: "Công nghệ & kiến trúc" },
   { field: "cost_for_smb", label: "Chi phí & phù hợp SMB" },
   { field: "throughput_and_reliability", label: "Throughput & độ tin cậy" },
+  { field: "observability_and_operations", label: "Quan sát & vận hành" },
+  { field: "data_and_integrations", label: "Dữ liệu & tích hợp" },
 ];
 
 export function SmbScaleAdvisoryPanel({
