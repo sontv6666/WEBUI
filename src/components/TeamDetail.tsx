@@ -33,6 +33,15 @@ function pickLatestAggregate(rows: ReviewItem[]): ReviewItem | null {
   return agg.reduce((best, r) => (new Date(r.updated_at) >= new Date(best.updated_at) ? r : best));
 }
 
+function pickLatestPerPush(perPushRows: ReviewItem[]): ReviewItem | null {
+  if (perPushRows.length === 0) return null;
+  return perPushRows.reduce((best, r) => (new Date(r.updated_at) >= new Date(best.updated_at) ? r : best));
+}
+
+function pushCardKey(item: ReviewItem) {
+  return `${item.team_id}-${item.commit_sha}-${item.updated_at}`;
+}
+
 /** Ưu tiên bản tổng hợp đội (mới nhất); không có thì gom từ các push. */
 function resolveTeamIdentity(perPushRows: ReviewItem[], aggregateRow: ReviewItem | null) {
   if (aggregateRow) {
@@ -72,9 +81,12 @@ export function TeamDetail({
 }) {
   const [pushPage, setPushPage] = useState(1);
   const [panelsExpanded, setPanelsExpanded] = useState(true);
+  const [pushDetailOpen, setPushDetailOpen] = useState<Record<string, boolean>>({});
 
   const aggregateRow = useMemo(() => pickLatestAggregate(rows), [rows]);
   const perPushRows = useMemo(() => rows.filter(isPerPushReview), [rows]);
+  const latestPerPush = useMemo(() => pickLatestPerPush(perPushRows), [perPushRows]);
+  const latestPerPushKey = latestPerPush ? pushCardKey(latestPerPush) : null;
 
   const identity = resolveTeamIdentity(perPushRows, aggregateRow);
   const hasIdentity = Boolean(identity.project_about || identity.tools_plain_bullets);
@@ -85,11 +97,15 @@ export function TeamDetail({
 
   useEffect(() => {
     setPushPage(1);
+    setPushDetailOpen({});
   }, [teamId]);
 
   useEffect(() => {
     if (pushPage > pushPageCount) setPushPage(pushPageCount);
   }, [pushPage, pushPageCount]);
+
+  const isPushDetailExpanded = (key: string) =>
+    pushDetailOpen[key] !== undefined ? pushDetailOpen[key] : key === latestPerPushKey;
 
   return (
     <section className={`panel team-panel ${panelsExpanded ? "" : "team-panel--compact-panels"}`}>
@@ -142,6 +158,40 @@ export function TeamDetail({
           ) : (
             <IdentityPlaceholder />
           )}
+        </div>
+      ) : null}
+
+      {teamId && !loading && latestPerPush ? (
+        <div className="latest-push-snapshot" role="region" aria-label="Đánh giá push mới nhất">
+          <h3 className="latest-push-snapshot__title">Đánh giá push mới nhất</h3>
+          <p className="latest-push-snapshot__meta">
+            Commit {shortSha(latestPerPush.commit_sha)} · cập nhật {toRelativeTime(latestPerPush.updated_at)} ·{" "}
+            {toAbsoluteTime(latestPerPush.updated_at)}
+            {latestPerPush.rag_level ? ` · RAG ${latestPerPush.rag_level}` : ""}
+          </p>
+          <MetaChips
+            items={(() => {
+              const bm = extractBatchReviewMeta(latestPerPush.structured_output);
+              const bv = formatBatchReviewDisplayValue(bm);
+              const bsp = formatBatchedShaPreview(bm.batchedCommitShas);
+              const chips: Array<{ label: string; value: string }> = [
+                { label: "Repo", value: latestPerPush.repo_name || "—" },
+                { label: "Trạng thái", value: formatStatusLabel(latestPerPush.status) },
+              ];
+              if (bv) chips.push({ label: "Đợt review", value: bv });
+              if (bsp) chips.push({ label: "SHA trong đợt", value: bsp });
+              return chips;
+            })()}
+          />
+          <p className="summary-text latest-push-snapshot__summary">
+            {latestPerPush.push_summary ||
+              extractOverallPicture(latestPerPush.structured_output)?.push_summary ||
+              fallbackSummary(latestPerPush.status)}
+          </p>
+          <p className="latest-push-snapshot__hint">
+            Luôn hiển thị bản <strong>per-push</strong> mới nhất theo thời gian cập nhật (toàn đội, không phụ thuộc trang
+            phân trang). Dữ liệu đồng bộ từ Supabase khi có review mới (realtime + làm mới định kỳ).
+          </p>
         </div>
       ) : null}
 
@@ -220,6 +270,8 @@ export function TeamDetail({
       )}
       {!loading &&
         paginatedPushRows.map((item) => {
+          const cardKey = pushCardKey(item);
+          const detailOpen = isPushDetailExpanded(cardKey);
           const op = extractOverallPicture(item.structured_output);
           const batchMeta = extractBatchReviewMeta(item.structured_output);
           const batchValue = formatBatchReviewDisplayValue(batchMeta);
@@ -235,7 +287,7 @@ export function TeamDetail({
           if (batchShaPreview) pushChips.push({ label: "SHA trong đợt", value: batchShaPreview });
           return (
             <article
-              key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`}
+              key={cardKey}
               className={`timeline-item push-detail-card ${onOpenTeam ? "clickable" : ""}`}
               data-status={item.status}
               onClick={onOpenTeam ? () => onOpenTeam(item.team_id) : undefined}
@@ -249,23 +301,58 @@ export function TeamDetail({
                   : undefined
               }
             >
-              <div className="line">
-                <strong>Commit {shortSha(item.commit_sha)}</strong>
-                {shouldShowReviewStatusBadge(item.status) ? (
-                  <span className={`badge ${item.status}`}>{formatStatusLabel(item.status)}</span>
-                ) : null}
+              <div className="line push-detail-card__headrow">
+                <div className="push-detail-card__title-group">
+                  <strong>Commit {shortSha(item.commit_sha)}</strong>
+                  {shouldShowReviewStatusBadge(item.status) ? (
+                    <span className={`badge ${item.status}`}>{formatStatusLabel(item.status)}</span>
+                  ) : null}
+                </div>
+                <div
+                  className="push-detail-card__toggle-wrap"
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    className="push-detail-card__toggle"
+                    aria-expanded={detailOpen}
+                    aria-controls={`push-detail-body-${cardKey}`}
+                    id={`push-detail-toggle-${cardKey}`}
+                    onClick={() =>
+                      setPushDetailOpen((prev) => ({
+                        ...prev,
+                        [cardKey]: !detailOpen,
+                      }))
+                    }
+                  >
+                    {detailOpen ? "Thu gọn chi tiết" : "Mở rộng chi tiết"}
+                  </button>
+                </div>
               </div>
               <MetaChips items={pushChips} />
-              <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
-              <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
-              <div className="detail-panels-region">
-                {renderExtendedLlmSections(item.structured_output, { scope: "push" })}
-                {renderHistoricalSynthesis(item.structured_output)}
-                {renderCriteriaCommentsPerPush(item.structured_output)}
-                <details className="json-details">
-                  <summary>Structured output — push này (JSON)</summary>
-                  <pre>{JSON.stringify(item.structured_output || {}, null, 2)}</pre>
-                </details>
+              <p className="summary-text">
+                {item.push_summary ||
+                  extractOverallPicture(item.structured_output)?.push_summary ||
+                  fallbackSummary(item.status)}
+              </p>
+              <div
+                className="push-detail-card__collapsible"
+                id={`push-detail-body-${cardKey}`}
+                role="region"
+                aria-labelledby={`push-detail-toggle-${cardKey}`}
+                hidden={!detailOpen}
+              >
+                <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
+                <div className="detail-panels-region">
+                  {renderExtendedLlmSections(item.structured_output, { scope: "push" })}
+                  {renderHistoricalSynthesis(item.structured_output)}
+                  {renderCriteriaCommentsPerPush(item.structured_output)}
+                  <details className="json-details">
+                    <summary>Structured output — push này (JSON)</summary>
+                    <pre>{JSON.stringify(item.structured_output || {}, null, 2)}</pre>
+                  </details>
+                </div>
               </div>
             </article>
           );
