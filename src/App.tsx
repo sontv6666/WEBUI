@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { TeamDetail } from "./components/TeamDetail";
 import { TeamsTable } from "./components/TeamsTable";
+import { MetaChips, Skeleton } from "./components/Presentation";
 import { useReviewsData } from "./hooks/useReviewsData";
 import {
   eventLabel,
@@ -55,13 +56,17 @@ export default function App() {
   return (
     <div className="page">
       <header className="topbar">
-        <div>
-          <h1>Hackathon Dashboard</h1>
-          <p className="sub">Bảng theo dõi các đội tham gia và trạng thái review</p>
+        <div className="brand-block">
+          <h1>Hackathon Review</h1>
+          <p className="sub">Theo dõi đội, mô tả hệ thống, tổng quan và review từng push — Hackathon RAG &amp; Agent</p>
         </div>
         <nav className="nav">
-          <Link to="/teams">Dashboard Teams</Link>
-          <Link to="/">Timeline</Link>
+          <NavLink to="/teams" className={({ isActive }) => (isActive ? "active" : undefined)}>
+            Đội thi
+          </NavLink>
+          <NavLink to="/" className={({ isActive }) => (isActive ? "active" : undefined)} end>
+            Timeline
+          </NavLink>
         </nav>
       </header>
 
@@ -71,35 +76,36 @@ export default function App() {
           element={
             <>
               <section className="kpi-grid">
-                <KpiCard label="Done" value={stats.done} />
-                <KpiCard label="Errors" value={stats.error} />
-                <KpiCard label="In Progress" value={stats.running} />
+                <KpiCard label="Hoàn thành" value={stats.done} />
+                <KpiCard label="Lỗi" value={stats.error} />
+                <KpiCard label="Đang chạy" value={stats.running} />
                 <KpiCard
-                  label="Last Update"
-                  value={stats.latest ? `${toRelativeTime(stats.latest)} (${toAbsoluteTime(stats.latest)})` : "N/A"}
+                  label="Cập nhật gần nhất"
+                  value={stats.latest ? `${toRelativeTime(stats.latest)} · ${toAbsoluteTime(stats.latest)}` : "—"}
                 />
               </section>
 
               <div className="controls">
                 <input
-                  placeholder="Search team / commit / summary..."
+                  placeholder="Tìm team, repo, commit, tóm tắt…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  aria-label="Tìm kiếm"
                 />
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                  <option value="all">All status</option>
-                  <option value="llm_started">AI started</option>
-                  <option value="done">Done</option>
-                  <option value="error">Error</option>
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Lọc trạng thái">
+                  <option value="all">Mọi trạng thái</option>
+                  <option value="llm_started">AI đang xử lý</option>
+                  <option value="done">Hoàn thành</option>
+                  <option value="error">Lỗi</option>
                 </select>
               </div>
 
               <main className="layout">
                 <section className="panel timeline">
-                  <h2>Global Timeline</h2>
-                  {loadingGlobal && <p className="state">Loading global feed...</p>}
+                  <h2 className="panel-title">Lịch sử review (toàn cục)</h2>
+                  {loadingGlobal && <TimelineSkeleton />}
                   {!loadingGlobal && filteredGlobal.length === 0 && (
-                    <p className="state">No events found for current filters.</p>
+                    <p className="state">Không có sự kiện phù hợp bộ lọc.</p>
                   )}
                   {!loadingGlobal &&
                     filteredGlobal.map((item) => (
@@ -128,8 +134,13 @@ export default function App() {
         <Route
           path="/teams"
           element={
-            <section className="panel">
-              <h2>Danh sach doi thi</h2>
+            <section className="panel page-panel">
+              <div className="panel-head">
+                <h2 className="panel-title">Bảng đội</h2>
+              </div>
+              <p className="sub page-hero" style={{ marginTop: 0 }}>
+                Mỗi thẻ là trạng thái mới nhất của một đội; mở rộng để xem mô tả hệ thống và từng lần push đã review.
+              </p>
               <TeamsTable
                 rows={latestTeams}
                 commits={globalFeed.filter(isPerPushReview)}
@@ -159,18 +170,28 @@ export default function App() {
   );
 }
 
-function TimelineItem({
-  item,
-  showDetails = false,
-  onOpenTeam,
-}: {
-  item: ReviewItem;
-  showDetails?: boolean;
-  onOpenTeam?: (teamId: string) => void;
-}) {
+function TimelineSkeleton() {
+  return (
+    <div className="timeline-skeleton" aria-busy="true">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="timeline-item" style={{ borderLeftColor: "#e2e8f0" }}>
+          <div className="line">
+            <Skeleton className="skeleton-line" style={{ width: "40%" }} />
+            <Skeleton className="skeleton-line" style={{ width: 72, height: 24 }} />
+          </div>
+          <Skeleton className="skeleton-line short" style={{ marginTop: 12 }} />
+          <Skeleton className="skeleton-line" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TimelineItem({ item, onOpenTeam }: { item: ReviewItem; onOpenTeam?: (teamId: string) => void }) {
   return (
     <article
       className={`timeline-item ${onOpenTeam ? "clickable" : ""}`}
+      data-status={item.status}
       onClick={onOpenTeam ? () => onOpenTeam(item.team_id) : undefined}
       role={onOpenTeam ? "button" : undefined}
       tabIndex={onOpenTeam ? 0 : undefined}
@@ -186,20 +207,15 @@ function TimelineItem({
         <strong>{item.team_id}</strong>
         <StatusBadge status={item.status} />
       </div>
-      <div className="meta">
-        <span>Repo: {item.repo_name || "-"}</span>
-        <span>{eventLabel(item.status)}</span>
-        <span>Commit: {shortSha(item.commit_sha)}</span>
-        <span title={toAbsoluteTime(item.updated_at)}>{toRelativeTime(item.updated_at)}</span>
-      </div>
-      <p>{item.push_summary || fallbackSummary(item.status)}</p>
-      {showDetails && (
-        <div className="details">
-          <span>RAG: {item.rag_level || "-"}</span>
-          <span>Input size: {item.input_code_length ?? 0}</span>
-          <span>Updated: {toAbsoluteTime(item.updated_at)}</span>
-        </div>
-      )}
+      <MetaChips
+        items={[
+          { label: "Repo", value: item.repo_name || "—" },
+          { label: "Sự kiện", value: eventLabel(item.status) },
+          { label: "Commit", value: shortSha(item.commit_sha) },
+          { label: "Cập nhật", value: `${toRelativeTime(item.updated_at)} · ${toAbsoluteTime(item.updated_at)}` },
+        ]}
+      />
+      <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
     </article>
   );
 }
@@ -245,10 +261,12 @@ function TeamCommitPage({
   }, [teamId, selectedTeam, setSelectedTeam]);
 
   return (
-    <section className="panel">
-      <div className="line">
-        <h2>Chi tiet danh gia theo team</h2>
-        <Link to="/teams">Quay lai Dashboard Teams</Link>
+    <section className="panel page-panel">
+      <Link to="/teams" className="back-link">
+        ← Quay lại bảng đội
+      </Link>
+      <div className="panel-head">
+        <h2 className="panel-title">Chi tiết đội &amp; hệ thống</h2>
       </div>
       <TeamDetail
         teamId={selectedTeam}

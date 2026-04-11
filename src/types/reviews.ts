@@ -35,9 +35,36 @@ export type CriteriaComments = {
 
 export function extractCriteriaComments(structuredOutput: Record<string, unknown> | null): CriteriaComments | null {
   if (!structuredOutput) return null;
-  const value = structuredOutput.criteria_comments;
+  let value = structuredOutput.criteria_comments;
+  if ((!value || typeof value !== "object") && structuredOutput.output && typeof structuredOutput.output === "object") {
+    value = (structuredOutput.output as Record<string, unknown>).criteria_comments;
+  }
   if (!value || typeof value !== "object") return null;
   return value as CriteriaComments;
+}
+
+/** Fields from LLM `overall_picture` (per-push & aggregate). */
+export type OverallPicture = {
+  project_about?: string;
+  tools_plain_bullets?: string;
+  current_focus?: string;
+  architectural_style?: string;
+  historical_synthesis?: string;
+  evolution_notes?: string;
+  push_summary?: string;
+  significant_change?: boolean;
+};
+
+export function extractOverallPicture(structuredOutput: Record<string, unknown> | null): OverallPicture | null {
+  if (!structuredOutput) return null;
+  const direct = structuredOutput.overall_picture;
+  if (direct && typeof direct === "object") return direct as OverallPicture;
+  const nested = structuredOutput.output;
+  if (nested && typeof nested === "object") {
+    const op = (nested as Record<string, unknown>).overall_picture;
+    if (op && typeof op === "object") return op as OverallPicture;
+  }
+  return null;
 }
 
 export type TeamLatestReview = {
@@ -70,16 +97,16 @@ export function toRelativeTime(value: string) {
 }
 
 export function eventLabel(status: string) {
-  if (status === "done") return "AI review completed";
-  if (status === "llm_started") return "AI review started";
-  if (status === "error") return "AI review failed";
-  return "Review event";
+  if (status === "done") return "Review hoàn thành";
+  if (status === "llm_started") return "AI đang xử lý";
+  if (status === "error") return "Review lỗi";
+  return "Sự kiện review";
 }
 
 export function fallbackSummary(status: string) {
-  if (status === "done") return "AI completed and stored the review output.";
-  if (status === "llm_started") return "New push received. AI started analyzing this commit.";
-  if (status === "error") return "AI encountered an issue while processing this commit.";
-  return "No summary provided.";
+  if (status === "done") return "Đã lưu kết quả review.";
+  if (status === "llm_started") return "Đã nhận push; AI đang phân tích.";
+  if (status === "error") return "Lỗi khi xử lý review.";
+  return "Chưa có tóm tắt.";
 }
 
