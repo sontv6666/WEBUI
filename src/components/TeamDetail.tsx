@@ -10,7 +10,6 @@ import {
   extractSuggestedQuestionsForTeam,
   extractSuggestedTestCases,
   fallbackSummary,
-  reviewKindOf,
   shortSha,
   toAbsoluteTime,
   toRelativeTime,
@@ -20,18 +19,15 @@ import { IdentityPlaceholder, MetaChips, ProjectToolsPanels, ProsePre, SectionLa
 
 const PUSH_LIST_PAGE_SIZE = 5;
 
-/** Ưu tiên aggregate; thiếu thì lấy từ các bản per-push (thường là push mới nhất đã có dữ liệu). */
-function resolveTeamIdentity(aggregateReview: ReviewItem | null, perPushRows: ReviewItem[]) {
-  const agg = extractOverallPicture(aggregateReview?.structured_output ?? null);
-  let projectAbout = (agg?.project_about ?? "").trim();
-  let toolsBullets = (agg?.tools_plain_bullets ?? "").trim();
-  if (!projectAbout || !toolsBullets) {
-    for (const row of perPushRows) {
-      const op = extractOverallPicture(row.structured_output);
-      if (!projectAbout && (op?.project_about ?? "").trim()) projectAbout = (op?.project_about ?? "").trim();
-      if (!toolsBullets && (op?.tools_plain_bullets ?? "").trim()) toolsBullets = (op?.tools_plain_bullets ?? "").trim();
-      if (projectAbout && toolsBullets) break;
-    }
+/** Lấy mô tả hệ thống / công cụ từ các bản ghi review của đội (mới nhất trước). */
+function resolveTeamIdentity(rows: ReviewItem[]) {
+  let projectAbout = "";
+  let toolsBullets = "";
+  for (const row of rows) {
+    const op = extractOverallPicture(row.structured_output);
+    if (!projectAbout && (op?.project_about ?? "").trim()) projectAbout = (op?.project_about ?? "").trim();
+    if (!toolsBullets && (op?.tools_plain_bullets ?? "").trim()) toolsBullets = (op?.tools_plain_bullets ?? "").trim();
+    if (projectAbout && toolsBullets) break;
   }
   return {
     project_about: projectAbout || null,
@@ -45,22 +41,18 @@ export function TeamDetail({
   onTeamChange,
   onOpenTeam,
   rows,
-  aggregateReview,
   loading,
-  loadingAggregate,
 }: {
   teamId: string;
   teams: Array<{ teamId: string; repoName?: string }>;
   onTeamChange: (teamId: string) => void;
   onOpenTeam?: (teamId: string) => void;
   rows: ReviewItem[];
-  aggregateReview: ReviewItem | null;
   loading: boolean;
-  loadingAggregate?: boolean;
 }) {
   const [pushPage, setPushPage] = useState(1);
 
-  const identity = resolveTeamIdentity(aggregateReview, rows);
+  const identity = resolveTeamIdentity(rows);
   const hasIdentity = Boolean(identity.project_about || identity.tools_plain_bullets);
 
   const pushPageCount = useMemo(() => computePageCount(rows.length, PUSH_LIST_PAGE_SIZE), [rows.length]);
@@ -93,7 +85,7 @@ export function TeamDetail({
           <div className="page-section-head">
             <h3 className="system-hero-title page-section-title">Hệ thống — mô tả &amp; công cụ</h3>
           </div>
-          {(loadingAggregate || loading) && !hasIdentity ? (
+          {loading && !hasIdentity ? (
             <Skeleton className="skeleton-line" style={{ height: 88 }} />
           ) : hasIdentity ? (
             <ProjectToolsPanels
@@ -106,45 +98,6 @@ export function TeamDetail({
           )}
         </div>
       ) : null}
-
-      {teamId && (
-        <div className="aggregate-panel page-section">
-          <div className="page-section-head">
-            <h3 className="aggregate-heading page-section-title">Tổng quan hệ thống</h3>
-          </div>
-          {loadingAggregate && (
-            <div className="state-row">
-              <Skeleton className="skeleton-line" style={{ flex: 1, height: 16 }} />
-            </div>
-          )}
-          {!loadingAggregate && !aggregateReview && (
-            <p className="state">Chưa có bản tổng hợp cấp team (hoặc chưa chạy xong).</p>
-          )}
-          {!loadingAggregate && aggregateReview && (
-            <article className="timeline-item aggregate-card" data-status={aggregateReview.status}>
-              <div className="line">
-                <strong>{reviewKindOf(aggregateReview)}</strong>
-                <span className={`badge ${aggregateReview.status}`}>{aggregateReview.status}</span>
-              </div>
-              <MetaChips
-                items={[
-                  { label: "Repo", value: aggregateReview.repo_name || "—" },
-                  { label: "Snapshot", value: shortSha(aggregateReview.commit_sha) },
-                  { label: "Cập nhật", value: `${toRelativeTime(aggregateReview.updated_at)} · ${toAbsoluteTime(aggregateReview.updated_at)}` },
-                  { label: "RAG", value: aggregateReview.rag_level || "—" },
-                ]}
-              />
-              <p className="summary-text">{aggregateReview.push_summary || fallbackSummary(aggregateReview.status)}</p>
-              {renderExtendedLlmSections(aggregateReview.structured_output)}
-              {renderHistoricalSynthesis(aggregateReview.structured_output)}
-              <details className="json-details">
-                <summary>Structured output — aggregate (JSON)</summary>
-                <pre>{JSON.stringify(aggregateReview.structured_output || {}, null, 2)}</pre>
-              </details>
-            </article>
-          )}
-        </div>
-      )}
 
       {teamId ? (
         <div className="page-section-head push-list-head">
@@ -190,7 +143,6 @@ export function TeamDetail({
             >
               <div className="line">
                 <strong>Commit {shortSha(item.commit_sha)}</strong>
-                <span className="badge subtle">{reviewKindOf(item)}</span>
                 <span className={`badge ${item.status}`}>{item.status}</span>
               </div>
               <MetaChips
@@ -205,6 +157,7 @@ export function TeamDetail({
               <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
               <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
               {renderExtendedLlmSections(item.structured_output)}
+              {renderHistoricalSynthesis(item.structured_output)}
               {renderCriteriaCommentsPerPush(item.structured_output)}
               <details className="json-details">
                 <summary>Structured output — push này (JSON)</summary>

@@ -1,12 +1,17 @@
-export type ReviewStatus = "llm_started" | "done" | "error" | "no_data" | string;
+/** Khớp `check (status in ('llm_started', 'done', 'error'))` trên bảng `ai_reviews`. */
+export type ReviewStatus = "llm_started" | "done" | "error" | string;
 
+/**
+ * Schema hiện tại (`20260410_reset_ai_reviews_full.sql`) không có cột `review_kind`;
+ * chỉ giữ type này nếu sau này thêm lại hàng tổng hợp cấp team.
+ */
 export type ReviewKind = "per_push" | "team_aggregate";
 
 export type ReviewItem = {
+  id?: string;
   team_id: string;
   repo_name: string | null;
   commit_sha: string | null;
-  /** Defaults to per_push when missing (older rows). */
   review_kind?: ReviewKind;
   status: ReviewStatus;
   push_summary: string | null;
@@ -21,8 +26,9 @@ export function reviewKindOf(item: ReviewItem): ReviewKind {
   return item.review_kind === "team_aggregate" ? "team_aggregate" : "per_push";
 }
 
+/** Mọi hàng trong DB reset hiện tại đều là bản ghi review theo commit. */
 export function isPerPushReview(item: ReviewItem): boolean {
-  return reviewKindOf(item) === "per_push";
+  return item.review_kind !== "team_aggregate";
 }
 
 export type CriteriaComments = {

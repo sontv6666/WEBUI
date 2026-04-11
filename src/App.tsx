@@ -8,7 +8,6 @@ import { useReviewsData } from "./hooks/useReviewsData";
 import {
   eventLabel,
   fallbackSummary,
-  isPerPushReview,
   shortSha,
   toAbsoluteTime,
   toRelativeTime,
@@ -24,13 +23,11 @@ export default function App() {
     globalFeed,
     latestTeams,
     teamFeed,
-    teamAggregate,
     selectedTeam,
     setSelectedTeam,
     loadingGlobal,
     loadingLatest,
     loadingTeam,
-    loadingAggregate,
     stats,
   } = useReviewsData();
   const navigate = useNavigate();
@@ -187,9 +184,7 @@ export default function App() {
                   onTeamChange={setSelectedTeam}
                   onOpenTeam={openTeamDetail}
                   rows={teamFeed}
-                  aggregateReview={teamAggregate}
                   loading={loadingTeam}
-                  loadingAggregate={loadingAggregate}
                 />
               </main>
             </>
@@ -224,7 +219,7 @@ export default function App() {
               </div>
               <TeamsTable
                 rows={latestTeams}
-                commits={globalFeed.filter(isPerPushReview)}
+                commits={globalFeed}
                 onOpenTeam={openTeamDetail}
                 loading={loadingLatest || loadingGlobal}
               />
@@ -238,10 +233,8 @@ export default function App() {
               selectedTeam={selectedTeam}
               setSelectedTeam={setSelectedTeam}
               teamFeed={teamFeed}
-              teamAggregate={teamAggregate}
               teamOptions={teamOptions}
               loadingTeam={loadingTeam}
-              loadingAggregate={loadingAggregate}
               onOpenTeam={openTeamDetail}
             />
           }
@@ -349,19 +342,15 @@ function TeamCommitPage({
   selectedTeam,
   setSelectedTeam,
   teamFeed,
-  teamAggregate,
   teamOptions,
   loadingTeam,
-  loadingAggregate,
   onOpenTeam,
 }: {
   selectedTeam: string;
   setSelectedTeam: (teamId: string) => void;
   teamFeed: ReviewItem[];
-  teamAggregate: ReviewItem | null;
   teamOptions: Array<{ teamId: string; repoName: string }>;
   loadingTeam: boolean;
-  loadingAggregate: boolean;
   onOpenTeam: (teamId: string) => void;
 }) {
   const { teamId } = useParams();
@@ -399,9 +388,7 @@ function TeamCommitPage({
         onTeamChange={handleTeamChange}
         onOpenTeam={onOpenTeam}
         rows={teamFeed}
-        aggregateReview={teamAggregate}
         loading={loadingTeam}
-        loadingAggregate={loadingAggregate}
       />
     </section>
   );
