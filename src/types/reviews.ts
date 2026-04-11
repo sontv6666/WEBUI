@@ -18,6 +18,9 @@ export type ReviewItem = {
   rag_level: string | null;
   structured_output: Record<string, unknown> | null;
   input_code_length: number | null;
+  /** Denormalized từ n8n / trigger; có thể null với dữ liệu cũ. */
+  commits_in_batch?: number | null;
+  batched_commit_shas?: string[] | null;
   created_at: string;
   updated_at: string;
 };
