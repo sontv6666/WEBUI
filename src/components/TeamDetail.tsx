@@ -14,6 +14,9 @@ import {
   formatBatchReviewDisplayValue,
   formatBatchedShaPreview,
   formatStatusLabel,
+  isPerPushReview,
+  reviewKindLabelVi,
+  reviewKindOf,
   shouldShowReviewStatusBadge,
   shortSha,
   toAbsoluteTime,
@@ -24,11 +27,23 @@ import { IdentityPlaceholder, MetaChips, ProjectToolsPanels, ProsePre, SectionLa
 
 const PUSH_LIST_PAGE_SIZE = 5;
 
-/** Lấy mô tả hệ thống / công cụ từ các bản ghi review của đội (mới nhất trước). */
-function resolveTeamIdentity(rows: ReviewItem[]) {
+function pickLatestAggregate(rows: ReviewItem[]): ReviewItem | null {
+  const agg = rows.filter((r) => reviewKindOf(r) === "team_aggregate");
+  if (agg.length === 0) return null;
+  return agg.reduce((best, r) => (new Date(r.updated_at) >= new Date(best.updated_at) ? r : best));
+}
+
+/** Ưu tiên bản tổng hợp đội (mới nhất); không có thì gom từ các push. */
+function resolveTeamIdentity(perPushRows: ReviewItem[], aggregateRow: ReviewItem | null) {
+  if (aggregateRow) {
+    const op = extractOverallPicture(aggregateRow.structured_output);
+    const pa = (op?.project_about ?? "").trim();
+    const tb = (op?.tools_plain_bullets ?? "").trim();
+    if (pa || tb) return { project_about: pa || null, tools_plain_bullets: tb || null };
+  }
   let projectAbout = "";
   let toolsBullets = "";
-  for (const row of rows) {
+  for (const row of perPushRows) {
     const op = extractOverallPicture(row.structured_output);
     if (!projectAbout && (op?.project_about ?? "").trim()) projectAbout = (op?.project_about ?? "").trim();
     if (!toolsBullets && (op?.tools_plain_bullets ?? "").trim()) toolsBullets = (op?.tools_plain_bullets ?? "").trim();
@@ -56,13 +71,17 @@ export function TeamDetail({
   loading: boolean;
 }) {
   const [pushPage, setPushPage] = useState(1);
+  const [panelsExpanded, setPanelsExpanded] = useState(true);
 
-  const identity = resolveTeamIdentity(rows);
+  const aggregateRow = useMemo(() => pickLatestAggregate(rows), [rows]);
+  const perPushRows = useMemo(() => rows.filter(isPerPushReview), [rows]);
+
+  const identity = resolveTeamIdentity(perPushRows, aggregateRow);
   const hasIdentity = Boolean(identity.project_about || identity.tools_plain_bullets);
 
-  const pushPageCount = useMemo(() => computePageCount(rows.length, PUSH_LIST_PAGE_SIZE), [rows.length]);
+  const pushPageCount = useMemo(() => computePageCount(perPushRows.length, PUSH_LIST_PAGE_SIZE), [perPushRows.length]);
 
-  const paginatedPushRows = useMemo(() => slicePage(rows, pushPage, PUSH_LIST_PAGE_SIZE), [rows, pushPage]);
+  const paginatedPushRows = useMemo(() => slicePage(perPushRows, pushPage, PUSH_LIST_PAGE_SIZE), [perPushRows, pushPage]);
 
   useEffect(() => {
     setPushPage(1);
@@ -73,7 +92,7 @@ export function TeamDetail({
   }, [pushPage, pushPageCount]);
 
   return (
-    <section className="panel team-panel">
+    <section className={`panel team-panel ${panelsExpanded ? "" : "team-panel--compact-panels"}`}>
       <div className="team-header">
         <h2 className="panel-title">Đội &amp; hệ thống</h2>
         <select value={teamId} onChange={(e) => onTeamChange(e.target.value)} aria-label="Chọn đội">
@@ -84,6 +103,28 @@ export function TeamDetail({
           ))}
         </select>
       </div>
+
+      {teamId ? (
+        <div className="team-panel-toolbar" role="toolbar" aria-label="Thu gọn hoặc mở rộng panel chi tiết">
+          <span className="team-panel-toolbar__hint">Panel chi tiết (đánh giá, test, câu hỏi, JSON)</span>
+          <div className="team-panel-toolbar__actions">
+            <button
+              type="button"
+              className={`team-panel-toolbtn ${panelsExpanded ? "" : "team-panel-toolbtn--active"}`}
+              onClick={() => setPanelsExpanded(false)}
+            >
+              Thu gọn
+            </button>
+            <button
+              type="button"
+              className={`team-panel-toolbtn ${panelsExpanded ? "team-panel-toolbtn--active" : ""}`}
+              onClick={() => setPanelsExpanded(true)}
+            >
+              Mở rộng
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {teamId ? (
         <div className="identity-first-block page-section">
@@ -104,6 +145,53 @@ export function TeamDetail({
         </div>
       ) : null}
 
+      {teamId && !loading && aggregateRow ? (
+        <article className="timeline-item team-aggregate-card" data-status={aggregateRow.status}>
+          <div className="page-section-head team-aggregate-head">
+            <h3 className="subsection-title page-section-title">Đánh giá toàn hệ thống</h3>
+            <span className="badge badge--kind">{reviewKindLabelVi("team_aggregate")}</span>
+          </div>
+          <p className="team-aggregate-meta">
+            Cập nhật {toRelativeTime(aggregateRow.updated_at)} · {toAbsoluteTime(aggregateRow.updated_at)}
+            {aggregateRow.rag_level ? ` · RAG: ${aggregateRow.rag_level}` : ""}
+          </p>
+          <MetaChips
+            items={[
+              { label: "Repo", value: aggregateRow.repo_name || "—" },
+              { label: "Tham chiếu commit", value: shortSha(aggregateRow.commit_sha) },
+              { label: "Trạng thái", value: formatStatusLabel(aggregateRow.status) },
+            ]}
+          />
+          <p className="summary-text">
+            {aggregateRow.push_summary ||
+              extractOverallPicture(aggregateRow.structured_output)?.push_summary ||
+              fallbackSummary(aggregateRow.status)}
+          </p>
+          <p className="team-aggregate-note">
+            Nội dung lấy từ bản ghi <strong>tổng hợp đội</strong> mới nhất trong DB — khi có commit/pipeline mới, chạy lại workflow aggregate
+            để cập nhật (realtime và polling 60s đã bật cho bảng này).
+          </p>
+          <div className="detail-panels-region">
+            {renderHistoricalSynthesis(aggregateRow.structured_output)}
+            {renderExtendedLlmSections(aggregateRow.structured_output, { scope: "team" })}
+            <details className="json-details">
+              <summary>Structured output — tổng hợp đội (JSON)</summary>
+              <pre>{JSON.stringify(aggregateRow.structured_output || {}, null, 2)}</pre>
+            </details>
+          </div>
+        </article>
+      ) : null}
+
+      {teamId && !loading && !aggregateRow && perPushRows.length > 0 ? (
+        <div className="team-aggregate-missing" role="status">
+          <p>
+            <strong>Chưa có đánh giá tổng hợp toàn hệ thống</strong> (hàng <code>team_aggregate</code> trong{" "}
+            <code>ai_reviews</code>). Hiện chỉ có review theo từng push. Khi n8n ghi bản tổng hợp đội, khối trên sẽ
+            hiện tự động với test case và câu hỏi cấp hệ thống.
+          </p>
+        </div>
+      ) : null}
+
       {teamId ? (
         <div className="page-section-head push-list-head">
           <h3 className="subsection-title page-section-title">Theo từng lần push</h3>
@@ -117,11 +205,14 @@ export function TeamDetail({
       )}
       {!teamId && !loading && <p className="state">Chưa chọn đội.</p>}
       {teamId && !loading && rows.length === 0 && <p className="state">Đội này chưa có bản ghi review.</p>}
-      {teamId && !loading && rows.length > 0 && (
+      {teamId && !loading && rows.length > 0 && perPushRows.length === 0 && (
+        <p className="state state--muted">Chưa có bản ghi review theo từng push (chỉ có tổng hợp đội hoặc dữ liệu khác).</p>
+      )}
+      {teamId && !loading && perPushRows.length > 0 && (
         <PaginationBar
           page={pushPage}
           pageCount={pushPageCount}
-          totalItems={rows.length}
+          totalItems={perPushRows.length}
           pageSize={PUSH_LIST_PAGE_SIZE}
           onPageChange={setPushPage}
           ariaLabel="Phân trang danh sách push theo đội"
@@ -167,13 +258,15 @@ export function TeamDetail({
               <MetaChips items={pushChips} />
               <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
               <p className="summary-text">{item.push_summary || fallbackSummary(item.status)}</p>
-              {renderExtendedLlmSections(item.structured_output)}
-              {renderHistoricalSynthesis(item.structured_output)}
-              {renderCriteriaCommentsPerPush(item.structured_output)}
-              <details className="json-details">
-                <summary>Structured output — push này (JSON)</summary>
-                <pre>{JSON.stringify(item.structured_output || {}, null, 2)}</pre>
-              </details>
+              <div className="detail-panels-region">
+                {renderExtendedLlmSections(item.structured_output, { scope: "push" })}
+                {renderHistoricalSynthesis(item.structured_output)}
+                {renderCriteriaCommentsPerPush(item.structured_output)}
+                <details className="json-details">
+                  <summary>Structured output — push này (JSON)</summary>
+                  <pre>{JSON.stringify(item.structured_output || {}, null, 2)}</pre>
+                </details>
+              </div>
             </article>
           );
         })}
@@ -220,7 +313,11 @@ function CopyTextButton({ text, children }: { text: string; children: ReactNode 
   );
 }
 
-function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | null) {
+function renderExtendedLlmSections(
+  structuredOutput: Record<string, unknown> | null,
+  options?: { scope?: "push" | "team" }
+) {
+  const scope = options?.scope ?? "push";
   const inv = extractInventoryExhaustive(structuredOutput);
   const assessment = extractAssessment(structuredOutput);
   const aiTests = extractSuggestedTestCases(structuredOutput);
@@ -243,13 +340,25 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
   const hasCoreBlock = Boolean((hasInventory && inv) || (hasAssessment && assessment));
   const hasDualPanels = (hasAiTests || hasSkeletonTests) && hasQuestions;
 
+  const invTitle =
+    scope === "team" ? "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" : "Danh mục công nghệ (liệt kê đầy đủ)";
+  const assessmentTitle = scope === "team" ? "Đánh giá (cấp đội / toàn hệ thống)" : "Đánh giá";
+  const testSubtitle =
+    scope === "team"
+      ? "Kịch bản end-to-end, demo, hồi quy — theo bản tổng hợp đội mới nhất."
+      : "Theo stack đội; có thể bổ sung khung khi AI chưa trả đủ.";
+  const questionsSubtitle =
+    scope === "team"
+      ? "Câu hỏi phỏng vấn / Q&A cấp đội (theo bản tổng hợp mới nhất)."
+      : "Gợi ý khi demo hoặc chấm.";
+
   return (
     <div className="llm-review-sections">
       {hasCoreBlock ? (
         <div className="criteria-box llm-extended-block">
           {hasInventory && inv ? (
             <div className="llm-section-chunk">
-              <SectionLabel icon="◇">Danh mục công nghệ (liệt kê đầy đủ)</SectionLabel>
+              <SectionLabel icon="◇">{invTitle}</SectionLabel>
               <div className="inventory-grid">
                 {INVENTORY_LABELS.map(({ key, label }) => {
                   const arr = (inv[key] as string[] | undefined) ?? [];
@@ -270,7 +379,7 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
           ) : null}
           {hasAssessment && assessment ? (
             <div className="llm-section-chunk">
-              <SectionLabel icon="◎">Đánh giá</SectionLabel>
+              <SectionLabel icon="◎">{assessmentTitle}</SectionLabel>
               {ASSESSMENT_LABELS.map(({ key, label }) => {
                 const text = (assessment[key] as string | undefined)?.trim();
                 if (!text) return null;
@@ -299,9 +408,9 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
                     <span className="review-panel__icon" aria-hidden>
                       ✓
                     </span>
-                    Test case gợi ý
+                    {scope === "team" ? "Test case — toàn hệ thống" : "Test case gợi ý"}
                   </h4>
-                  <p className="review-panel__subtitle">Theo stack đội; có thể bổ sung khung khi AI chưa trả đủ.</p>
+                  <p className="review-panel__subtitle">{testSubtitle}</p>
                 </div>
                 {copyTestBundle.trim() ? (
                   <CopyTextButton text={copyTestBundle}>Sao chép tất cả</CopyTextButton>
@@ -353,9 +462,9 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
                     <span className="review-panel__icon review-panel__icon--questions" aria-hidden>
                       ?
                     </span>
-                    Câu hỏi gợi ý cho đội
+                    {scope === "team" ? "Câu hỏi — cấp đội / toàn hệ thống" : "Câu hỏi gợi ý cho đội"}
                   </h4>
-                  <p className="review-panel__subtitle">Gợi ý khi demo hoặc chấm.</p>
+                  <p className="review-panel__subtitle">{questionsSubtitle}</p>
                 </div>
                 <CopyTextButton text={questions.join("\n\n")}>Sao chép tất cả</CopyTextButton>
               </header>
