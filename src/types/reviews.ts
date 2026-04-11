@@ -73,6 +73,7 @@ function unwrapStructuredRoot(structuredOutput: Record<string, unknown> | null):
     structuredOutput.inventory_exhaustive != null ||
     structuredOutput.assessment != null ||
     structuredOutput.suggested_test_cases != null ||
+    structuredOutput.suggested_questions_for_team != null ||
     structuredOutput.suggested_prompt_refinement != null
   ) {
     return structuredOutput;
@@ -125,6 +126,50 @@ export function extractPromptRefinement(structuredOutput: Record<string, unknown
   const s = root?.suggested_prompt_refinement;
   if (typeof s !== "string" || !s.trim()) return null;
   return s.trim();
+}
+
+export function extractSuggestedQuestionsForTeam(structuredOutput: Record<string, unknown> | null): string[] | null {
+  const root = unwrapStructuredRoot(structuredOutput);
+  const t = root?.suggested_questions_for_team;
+  if (!Array.isArray(t)) return null;
+  return t.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+}
+
+/** Khung test tối thiểu sinh từ inventory khi LLM chưa trả suggested_test_cases (bổ trợ trên UI). */
+export function buildSkeletonTestCasesFromInventory(inv: InventoryExhaustive | null): string[] {
+  if (!inv) return [];
+  const out: string[] = [];
+  const llm = inv.llm_models_and_apis ?? [];
+  if (llm.length > 0) {
+    out.push(
+      `Given model/API đã cấu hình (${llm.slice(0, 4).join(", ")}), When gửi một prompt đại diện use-case chính của đội, Then phản hồi đúng định dạng và không lỗi 5xx/timeout bất thường.`
+    );
+  }
+  const vd = inv.vector_databases ?? [];
+  if (vd.length > 0) {
+    out.push(
+      `Given tài liệu mẫu đã ingest vào ${vd[0]}, When truy vấn semantic gần với đoạn đã index, Then trả chunk liên quan (và citation/trích dẫn nếu UI có).`
+    );
+  }
+  const ag = inv.agent_orchestration ?? [];
+  if (ag.length > 0) {
+    out.push(
+      `When chạy luồng agent (${ag[0]}), Then tool/route được gọi đúng và trạng thái không mất giữa các bước.`
+    );
+  }
+  const fw = inv.frameworks_and_runtimes ?? [];
+  if (fw.length > 0) {
+    out.push(
+      `Given khởi động dịch vụ (${fw.slice(0, 3).join(", ")}), When kiểm tra health/readiness hoặc smoke test API, Then trạng thái OK và log không báo lỗi cấu hình.`
+    );
+  }
+  const tp = inv.third_party_integrations ?? [];
+  if (tp.length > 0) {
+    out.push(
+      `Given tích hợp ${tp.slice(0, 2).join(", ")}, When thao tác đại diện (auth/callback/webhook tùy hệ), Then không lộ secret client-side và xử lý lỗi rõ ràng.`
+    );
+  }
+  return out.slice(0, 8);
 }
 
 export type TeamLatestReview = {

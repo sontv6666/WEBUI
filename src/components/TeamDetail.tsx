@@ -1,10 +1,13 @@
+import { useState, type ReactNode } from "react";
 import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
+  buildSkeletonTestCasesFromInventory,
   extractAssessment,
   extractCriteriaComments,
   extractInventoryExhaustive,
   extractOverallPicture,
   extractPromptRefinement,
+  extractSuggestedQuestionsForTeam,
   extractSuggestedTestCases,
   fallbackSummary,
   reviewKindOf,
@@ -207,10 +210,32 @@ const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = 
   { key: "security", label: "Bảo mật" },
 ];
 
+function CopyTextButton({ text, children }: { text: string; children: ReactNode }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      className="copy-text-btn"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setDone(true);
+          window.setTimeout(() => setDone(false), 2000);
+        } catch {
+          /* ignore */
+        }
+      }}
+    >
+      {done ? "Đã sao chép" : children}
+    </button>
+  );
+}
+
 function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | null) {
   const inv = extractInventoryExhaustive(structuredOutput);
   const assessment = extractAssessment(structuredOutput);
-  const tests = extractSuggestedTestCases(structuredOutput);
+  const aiTests = extractSuggestedTestCases(structuredOutput);
+  const questions = extractSuggestedQuestionsForTeam(structuredOutput);
   const promptHint = extractPromptRefinement(structuredOutput);
 
   const hasInventory =
@@ -218,8 +243,14 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
     INVENTORY_LABELS.some(({ key }) => Array.isArray(inv[key]) && (inv[key] as string[]).length > 0);
   const hasAssessment =
     assessment && ASSESSMENT_LABELS.some(({ key }) => Boolean((assessment[key] as string | undefined)?.trim()));
-  const hasTests = tests && tests.length > 0;
-  if (!hasInventory && !hasAssessment && !hasTests && !promptHint) return null;
+  const hasAiTests = Boolean(aiTests && aiTests.length > 0);
+  const skeletonTests = !hasAiTests && hasInventory && inv ? buildSkeletonTestCasesFromInventory(inv) : [];
+  const hasSkeletonTests = skeletonTests.length > 0;
+  const hasQuestions = Boolean(questions && questions.length > 0);
+
+  if (!hasInventory && !hasAssessment && !hasAiTests && !hasSkeletonTests && !hasQuestions && !promptHint) return null;
+
+  const copyTestBundle = [...(aiTests ?? []), ...skeletonTests].join("\n\n---\n\n");
 
   return (
     <div className="criteria-box llm-extended-block">
@@ -246,7 +277,10 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
       ) : null}
       {hasAssessment && assessment ? (
         <div style={{ marginBottom: 14 }}>
-          <SectionLabel icon="◎">Đánh giá</SectionLabel>
+          <SectionLabel icon="◎">Đánh giá (ưu / khuyết · ngữ cảnh · cấu trúc · hoàn thiện · bảo mật)</SectionLabel>
+          <p className="llm-block-hint">
+            Sáu khối dưới đây tương ứng: Ưu điểm, Khuyết điểm, Ngữ cảnh, Cấu trúc source, Độ hoàn thiện, Bảo mật — do AI trích từ diff/review.
+          </p>
           {ASSESSMENT_LABELS.map(({ key, label }) => {
             const text = (assessment[key] as string | undefined)?.trim();
             if (!text) return null;
@@ -259,21 +293,62 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
           })}
         </div>
       ) : null}
-      {hasTests && tests ? (
+      {(hasAiTests || hasSkeletonTests) && (
+        <div style={{ marginBottom: hasQuestions || promptHint ? 14 : 0 }} className="test-case-panel">
+          <div className="test-case-panel-head">
+            <div>
+              <SectionLabel icon="✓">Test case gợi ý (AI + khung bổ trợ)</SectionLabel>
+              <p className="llm-block-hint">
+                AI sinh kịch bản theo stack đội; nếu chưa có, UI tự ghép khung tối thiểu từ danh mục công nghệ. Dùng để tự kiểm thử hoặc chấm.
+              </p>
+            </div>
+            {(hasAiTests || hasSkeletonTests) && copyTestBundle.trim() ? (
+              <CopyTextButton text={copyTestBundle}>Sao chép tất cả test case</CopyTextButton>
+            ) : null}
+          </div>
+          {hasAiTests && aiTests ? (
+            <>
+              <span className="sub-block-title">Do AI phân tích hệ thống</span>
+              <ol className="test-case-list">
+                {aiTests.map((t, i) => (
+                  <li key={i}>
+                    <ProsePre>{t}</ProsePre>
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : null}
+          {hasSkeletonTests ? (
+            <>
+              <span className="sub-block-title">Khung kiểm thử bổ sung (tự sinh từ danh mục)</span>
+              <ol className="test-case-list skeleton-tests">
+                {skeletonTests.map((t, i) => (
+                  <li key={i}>
+                    <ProsePre>{t}</ProsePre>
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : null}
+        </div>
+      )}
+      {hasQuestions && questions ? (
         <div style={{ marginBottom: promptHint ? 14 : 0 }}>
-          <SectionLabel icon="✓">Gợi ý test case</SectionLabel>
-          <ol className="test-case-list">
-            {tests.map((t, i) => (
+          <SectionLabel icon="?">Câu hỏi gợi ý cho đội (demo / chấm)</SectionLabel>
+          <p className="llm-block-hint">Gợi ý phỏng vấn — có thể hỏi thêm khi team trình bày.</p>
+          <ol className="questions-for-team-list">
+            {questions.map((q, i) => (
               <li key={i}>
-                <ProsePre>{t}</ProsePre>
+                <ProsePre>{q}</ProsePre>
               </li>
             ))}
           </ol>
+          <CopyTextButton text={questions.join("\n")}>Sao chép danh sách câu hỏi</CopyTextButton>
         </div>
       ) : null}
       {promptHint ? (
         <div>
-          <SectionLabel icon="→">Gợi ý tối ưu prompt</SectionLabel>
+          <SectionLabel icon="→">Gợi ý tối ưu prompt (so với prompt đội đang dùng)</SectionLabel>
           <ProsePre>{promptHint}</ProsePre>
         </div>
       ) : null}
