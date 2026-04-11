@@ -1,7 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReviewItem, TeamLatestReview } from "../types/reviews";
 import { extractCriteriaComments, extractOverallPicture, shortSha, toAbsoluteTime, toRelativeTime } from "../types/reviews";
+import { computePageCount, PaginationBar, slicePage } from "./Pagination";
 import { MetaChips, ProjectToolsPanels, ProsePre, SectionLabel } from "./Presentation";
+
+const TEAMS_PAGE_SIZE = 6;
 
 export function TeamsTable({
   rows: latestRows,
@@ -16,6 +19,7 @@ export function TeamsTable({
 }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
+  const [teamsPage, setTeamsPage] = useState(1);
 
   const grouped = useMemo(() => {
     const commitsByTeam = new Map<string, ReviewItem[]>();
@@ -38,6 +42,18 @@ export function TeamsTable({
       }));
   }, [query, latestRows, status, commits]);
 
+  const teamsPageCount = useMemo(() => computePageCount(grouped.length, TEAMS_PAGE_SIZE), [grouped.length]);
+
+  const paginatedGroups = useMemo(() => slicePage(grouped, teamsPage, TEAMS_PAGE_SIZE), [grouped, teamsPage]);
+
+  useEffect(() => {
+    setTeamsPage(1);
+  }, [query, status]);
+
+  useEffect(() => {
+    if (teamsPage > teamsPageCount) setTeamsPage(teamsPageCount);
+  }, [teamsPage, teamsPageCount]);
+
   return (
     <>
       <div className="controls teams-controls sticky-filters">
@@ -55,10 +71,14 @@ export function TeamsTable({
         </select>
       </div>
 
+      <p className="teams-table-intro page-section-desc">
+        Lọc phía trên · tối đa <strong>{TEAMS_PAGE_SIZE}</strong> đội/trang. <strong>Một cú nhấp</strong> vào thẻ (khu vực trắng / tóm tắt) để mở trang chi tiết; mở khối &quot;Các lần push&quot; bên trong <em>không</em> thoát trang.
+      </p>
+
       <div className="team-groups">
         {loading && <p className="state">Đang tải danh sách đội…</p>}
         {!loading &&
-          grouped.map(({ team, commits: teamCommits }) => {
+          paginatedGroups.map(({ team, commits: teamCommits }) => {
             const latestOp = extractOverallPicture(
               teamCommits.find((c) => c.commit_sha === team.commit_sha)?.structured_output ?? null
             );
@@ -69,6 +89,7 @@ export function TeamsTable({
                 onClick={onOpenTeam ? () => onOpenTeam(team.team_id) : undefined}
                 role={onOpenTeam ? "button" : undefined}
                 tabIndex={onOpenTeam ? 0 : undefined}
+                aria-label={onOpenTeam ? `Đội ${team.team_id}: nhấp để mở trang chi tiết đội` : undefined}
                 onKeyDown={
                   onOpenTeam
                     ? (e) => {
@@ -97,7 +118,12 @@ export function TeamsTable({
                 ) : null}
                 <p className="team-summary">{team.push_summary || "Chưa có tóm tắt AI."}</p>
 
-                <details className="team-commits-details" open>
+                <details
+                  className="team-commits-details"
+                  open
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
                   <summary>Các lần push đã nhận xét</summary>
                   <div className="team-commits-list">
                     {teamCommits.length === 0 && <p className="state">Chưa có bản ghi per-push cho đội này.</p>}
@@ -123,11 +149,29 @@ export function TeamsTable({
                     })}
                   </div>
                 </details>
+
+                {onOpenTeam ? (
+                  <div className="team-card-cta" aria-hidden>
+                    <span className="team-card-cta__label">Mở trang chi tiết đội</span>
+                    <span className="team-card-cta__arrow">→</span>
+                  </div>
+                ) : null}
               </article>
             );
           })}
         {!loading && grouped.length === 0 && <p className="state">Không có đội phù hợp bộ lọc.</p>}
       </div>
+
+      {!loading && grouped.length > 0 && (
+        <PaginationBar
+          page={teamsPage}
+          pageCount={teamsPageCount}
+          totalItems={grouped.length}
+          pageSize={TEAMS_PAGE_SIZE}
+          onPageChange={setTeamsPage}
+          ariaLabel="Phân trang bảng đội (cuối)"
+        />
+      )}
     </>
   );
 }

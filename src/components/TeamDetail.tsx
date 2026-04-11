@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
   buildSkeletonTestCasesFromInventory,
@@ -15,7 +15,10 @@ import {
   toAbsoluteTime,
   toRelativeTime,
 } from "../types/reviews";
+import { computePageCount, PaginationBar, slicePage } from "./Pagination";
 import { IdentityPlaceholder, MetaChips, ProjectToolsPanels, ProsePre, SectionLabel, Skeleton } from "./Presentation";
+
+const PUSH_LIST_PAGE_SIZE = 5;
 
 /** Ưu tiên aggregate; thiếu thì lấy từ các bản per-push (thường là push mới nhất đã có dữ liệu). */
 function resolveTeamIdentity(aggregateReview: ReviewItem | null, perPushRows: ReviewItem[]) {
@@ -55,8 +58,22 @@ export function TeamDetail({
   loading: boolean;
   loadingAggregate?: boolean;
 }) {
+  const [pushPage, setPushPage] = useState(1);
+
   const identity = resolveTeamIdentity(aggregateReview, rows);
   const hasIdentity = Boolean(identity.project_about || identity.tools_plain_bullets);
+
+  const pushPageCount = useMemo(() => computePageCount(rows.length, PUSH_LIST_PAGE_SIZE), [rows.length]);
+
+  const paginatedPushRows = useMemo(() => slicePage(rows, pushPage, PUSH_LIST_PAGE_SIZE), [rows, pushPage]);
+
+  useEffect(() => {
+    setPushPage(1);
+  }, [teamId]);
+
+  useEffect(() => {
+    if (pushPage > pushPageCount) setPushPage(pushPageCount);
+  }, [pushPage, pushPageCount]);
 
   return (
     <section className="panel team-panel">
@@ -72,13 +89,15 @@ export function TeamDetail({
       </div>
 
       {teamId ? (
-        <div className="identity-first-block">
-          <h3 className="system-hero-title">Hệ thống — mô tả &amp; công cụ</h3>
-          <p className="team-context-intro">
+        <div className="identity-first-block page-section">
+          <div className="page-section-head">
+            <h3 className="system-hero-title page-section-title">Hệ thống — mô tả &amp; công cụ</h3>
+            <p className="team-context-intro page-section-desc">
             Khối đầu là <strong>hệ thống</strong> (phạm vi, chức năng) và <strong>công cụ</strong> team đang dùng. Tiếp theo là{" "}
             <strong>tổng quan hệ thống</strong> theo lịch sử nhiều push. Phần <strong>tiêu chí R1</strong> nằm dưới —{" "}
             <em>mỗi lần push một bản nhận xét</em>.
-          </p>
+            </p>
+          </div>
           {(loadingAggregate || loading) && !hasIdentity ? (
             <Skeleton className="skeleton-line" style={{ height: 88 }} />
           ) : hasIdentity ? (
@@ -94,11 +113,13 @@ export function TeamDetail({
       ) : null}
 
       {teamId && (
-        <div className="aggregate-panel">
-          <h3 className="aggregate-heading">Tổng quan hệ thống</h3>
-          <p className="team-context-intro" style={{ marginTop: 0 }}>
-            Tổng hợp cấp team: diễn biến và trạng thái hiện tại của <strong>hệ thống</strong>. Không thay cho rubric R1 ở từng push.
-          </p>
+        <div className="aggregate-panel page-section">
+          <div className="page-section-head">
+            <h3 className="aggregate-heading page-section-title">Tổng quan hệ thống</h3>
+            <p className="team-context-intro page-section-desc" style={{ marginTop: 0 }}>
+              Tổng hợp cấp team: diễn biến và trạng thái hiện tại của <strong>hệ thống</strong>. Không thay cho rubric R1 ở từng push.
+            </p>
+          </div>
           {loadingAggregate && (
             <div className="state-row">
               <Skeleton className="skeleton-line" style={{ flex: 1, height: 16 }} />
@@ -133,10 +154,14 @@ export function TeamDetail({
         </div>
       )}
 
-      <h3 className="subsection-title">Theo từng lần push</h3>
-      <p className="team-context-intro" style={{ marginTop: -6, marginBottom: 14 }}>
-        Mỗi thẻ = một push đã review. <strong>R1_01–R1_05</strong> là nhận xét tiêu chí <strong>cho push đó</strong>, tách khỏi tổng quan hệ thống phía trên.
-      </p>
+      {teamId ? (
+        <div className="page-section-head push-list-head">
+          <h3 className="subsection-title page-section-title">Theo từng lần push</h3>
+          <p className="team-context-intro page-section-desc" style={{ marginTop: 0, marginBottom: 0 }}>
+            Mỗi thẻ = một push đã review ({rows.length} bản ghi). <strong>R1_01–R1_05</strong> là tiêu chí <strong>theo push</strong>. Phân trang: {PUSH_LIST_PAGE_SIZE} push/trang.
+          </p>
+        </div>
+      ) : null}
       {loading && (
         <div aria-busy="true">
           <Skeleton className="skeleton-line" style={{ height: 120, marginBottom: 12 }} />
@@ -145,13 +170,23 @@ export function TeamDetail({
       )}
       {!teamId && !loading && <p className="state">Chưa chọn đội.</p>}
       {teamId && !loading && rows.length === 0 && <p className="state">Đội này chưa có bản ghi review.</p>}
+      {teamId && !loading && rows.length > 0 && (
+        <PaginationBar
+          page={pushPage}
+          pageCount={pushPageCount}
+          totalItems={rows.length}
+          pageSize={PUSH_LIST_PAGE_SIZE}
+          onPageChange={setPushPage}
+          ariaLabel="Phân trang danh sách push theo đội"
+        />
+      )}
       {!loading &&
-        rows.map((item) => {
+        paginatedPushRows.map((item) => {
           const op = extractOverallPicture(item.structured_output);
           return (
             <article
               key={`${item.team_id}-${item.commit_sha}-${item.updated_at}`}
-              className={`timeline-item ${onOpenTeam ? "clickable" : ""}`}
+              className={`timeline-item push-detail-card ${onOpenTeam ? "clickable" : ""}`}
               data-status={item.status}
               onClick={onOpenTeam ? () => onOpenTeam(item.team_id) : undefined}
               role={onOpenTeam ? "button" : undefined}
