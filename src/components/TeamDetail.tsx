@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import type { AssessmentBlock, CriteriaComments, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
   buildSkeletonTestCasesFromInventory,
@@ -340,13 +341,25 @@ export function TeamDetail({
               : "Ưu tiên so sánh đội qua chất lượng RAG và các khía cạnh phi chức năng, không chỉ tính năng."}
           </p>
         </div>
-        <select value={teamId} onChange={(e) => onTeamChange(e.target.value)} aria-label="Chọn đội">
-          {teams.map((team) => (
-            <option key={team.teamId} value={team.teamId}>
-              {team.repoName ? `${team.teamId} · ${team.repoName}` : team.teamId}
-            </option>
-          ))}
-        </select>
+        <div className="team-header__toolbar">
+          {homeSidebar && teamId ? (
+            <Link className="link-button link-button--accent" to={`/teams/${encodeURIComponent(teamId)}`}>
+              Chi tiết đội →
+            </Link>
+          ) : null}
+          {!homeSidebar && teamId ? (
+            <Link className="link-button" to="/teams">
+              ← Bảng đội
+            </Link>
+          ) : null}
+          <select value={teamId} onChange={(e) => onTeamChange(e.target.value)} aria-label="Chọn đội">
+            {teams.map((team) => (
+              <option key={team.teamId} value={team.teamId}>
+                {team.repoName ? `${team.teamId} · ${team.repoName}` : team.teamId}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {teamId && !homeSidebar ? (
@@ -580,7 +593,7 @@ export function TeamDetail({
                 >
                   <button
                     type="button"
-                    className="push-detail-card__toggle"
+                    className="push-detail-card__toggle expand-panel-btn"
                     aria-expanded={detailOpen}
                     aria-controls={`push-detail-body-${cardKey}`}
                     id={`push-detail-toggle-${cardKey}`}
@@ -648,7 +661,7 @@ function renderCollapsibleRagAndAssessment(
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.stopPropagation()}
     >
-      <summary className="push-core-review-details__summary">{summaryText}</summary>
+      <summary className="push-core-review-details__summary expand-panel-btn">{summaryText}</summary>
       <div
         className={`push-core-review-block push-core-review-block--in-details${
           assessmentScope === "team" ? " push-core-review-block--aggregate-inner" : ""

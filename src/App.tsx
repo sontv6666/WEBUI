@@ -21,6 +21,8 @@ import {
 const TIMELINE_PAGE_SIZE = 12;
 
 export default function App() {
+  const [searchInput, setSearchInput] = useState("");
+  /** Bộ lọc timeline — áp khi bấm Tìm hoặc Enter */
   const [query, setQuery] = useState("");
   const [timelinePage, setTimelinePage] = useState(1);
   const {
@@ -157,14 +159,26 @@ export default function App() {
                 />
               </section>
 
-              <div className="controls">
+              <form
+                className="controls controls--search"
+                role="search"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setQuery(searchInput.trim());
+                }}
+              >
                 <input
+                  name="q"
                   placeholder="Tìm team, repo, commit, tóm tắt…"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   aria-label="Tìm kiếm"
+                  autoComplete="off"
                 />
-              </div>
+                <button type="submit" className="controls-search-btn">
+                  Tìm
+                </button>
+              </form>
 
               <main className="layout">
                 <section className="panel timeline page-section timeline-page-section">
@@ -461,8 +475,25 @@ function TeamCommitPage({
 
   const aggregateNavItems = useMemo(() => getAggregateNavEntries(teamFeed), [teamFeed]);
 
+  const [tocOpen, setTocOpen] = useState(false);
+
+  useEffect(() => {
+    if (!tocOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTocOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [tocOpen]);
+
   const scrollToAggregateSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTocOpen(false);
   };
 
   return (
@@ -477,15 +508,47 @@ function TeamCommitPage({
           </span>
         </Link>
       </nav>
-      <div className="panel-head panel-head--detail">
+      <div className="panel-head panel-head--detail team-detail-panel-head">
         <h2 className="panel-title">Chi tiết đội &amp; hệ thống</h2>
-      </div>
-      <div
-        className={`team-detail-page-layout${aggregateNavItems.length > 0 ? " team-detail-page-layout--with-toc" : ""}`}
-      >
         {aggregateNavItems.length > 0 ? (
-          <nav className="team-detail-toc" aria-label="Mục lục đánh giá toàn hệ thống">
-            <p className="team-detail-toc__title">Mục lục</p>
+          <button
+            type="button"
+            className="team-detail-toc-trigger"
+            onClick={() => setTocOpen(true)}
+            aria-expanded={tocOpen}
+            aria-controls="team-detail-toc-drawer"
+          >
+            Mục lục
+          </button>
+        ) : null}
+      </div>
+      <div className="team-detail-page-layout">
+        {aggregateNavItems.length > 0 && tocOpen ? (
+          <button
+            type="button"
+            className="team-detail-toc-backdrop"
+            aria-label="Đóng mục lục"
+            onClick={() => setTocOpen(false)}
+          />
+        ) : null}
+        {aggregateNavItems.length > 0 ? (
+          <nav
+            id="team-detail-toc-drawer"
+            className={`team-detail-toc team-detail-toc-drawer${tocOpen ? " team-detail-toc-drawer--open" : ""}`}
+            aria-hidden={!tocOpen}
+            aria-label="Mục lục đánh giá toàn hệ thống"
+          >
+            <div className="team-detail-toc-drawer__head">
+              <p className="team-detail-toc__title">Mục lục</p>
+              <button
+                type="button"
+                className="team-detail-toc-drawer__close"
+                onClick={() => setTocOpen(false)}
+                aria-label="Đóng mục lục"
+              >
+                ×
+              </button>
+            </div>
             <ul className="team-detail-toc__list">
               {aggregateNavItems.map((item) => (
                 <li key={item.id}>

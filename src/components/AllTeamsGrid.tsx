@@ -27,6 +27,8 @@ export function AllTeamsGrid({
   commits: ReviewItem[];
   loading: boolean;
 }) {
+  const [searchInput, setSearchInput] = useState("");
+  /** Lọc lưới — áp khi bấm Tìm hoặc Enter */
   const [query, setQuery] = useState("");
 
   const byTeam = useMemo(() => {
@@ -64,14 +66,26 @@ export function AllTeamsGrid({
 
   return (
     <>
-      <div className="controls all-teams-controls">
+      <form
+        className="controls controls--search all-teams-controls"
+        role="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setQuery(searchInput.trim());
+        }}
+      >
         <input
+          name="q"
           placeholder="Tìm team, repo, mô tả hệ thống…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           aria-label="Tìm kiếm đội"
+          autoComplete="off"
         />
-      </div>
+        <button type="submit" className="controls-search-btn">
+          Tìm
+        </button>
+      </form>
       <p className="all-teams-disclaimer page-section-desc">
         Số commit mỗi đội đếm trong <strong>tối đa {GLOBAL_FEED_QUERY_LIMIT}</strong> bản ghi mới nhất đã tải; nếu DB lớn hơn, số có thể thấp hơn thực tế.
       </p>
