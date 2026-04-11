@@ -131,6 +131,39 @@ export function extractAssessment(structuredOutput: Record<string, unknown> | nu
   return a as AssessmentBlock;
 }
 
+/** `rag_maturity` từ LLM (có thể lệch cột `rag_level` hoặc bổ sung `features_detected`). */
+export type RagMaturity = {
+  level?: string;
+  features_detected?: string[];
+};
+
+function readRagMaturityFromObject(obj: Record<string, unknown> | null | undefined): RagMaturity | null {
+  if (!obj) return null;
+  const rm = obj.rag_maturity;
+  if (!rm || typeof rm !== "object") return null;
+  const o = rm as Record<string, unknown>;
+  const level = typeof o.level === "string" && o.level.trim() ? o.level.trim() : undefined;
+  const fd = o.features_detected;
+  const features = Array.isArray(fd)
+    ? fd.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+    : [];
+  if (!level && features.length === 0) return null;
+  return { level, features_detected: features.length > 0 ? features : undefined };
+}
+
+export function extractRagMaturity(structuredOutput: Record<string, unknown> | null): RagMaturity | null {
+  if (!structuredOutput) return null;
+  return (
+    readRagMaturityFromObject(structuredOutput) ??
+    readRagMaturityFromObject(
+      structuredOutput.output && typeof structuredOutput.output === "object"
+        ? (structuredOutput.output as Record<string, unknown>)
+        : null
+    ) ??
+    readRagMaturityFromObject(unwrapStructuredRoot(structuredOutput))
+  );
+}
+
 export function extractSuggestedTestCases(structuredOutput: Record<string, unknown> | null): string[] | null {
   const root = unwrapStructuredRoot(structuredOutput);
   const t = root?.suggested_test_cases;

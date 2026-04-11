@@ -708,6 +708,56 @@ body {
   font-weight: 700;
 }
 
+/* R1 + assessment + rag_maturity: luôn hiển thị (không nằm trong vùng bị ẩn khi thu gọn panel / chưa mở chi tiết push). */
+.push-core-review-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.push-core-review-block--snapshot {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+.push-core-review-block--aggregate {
+  margin-bottom: 16px;
+}
+
+.rag-maturity-panel__level {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.rag-maturity-panel__label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-right: 8px;
+  vertical-align: baseline;
+}
+
+.rag-maturity-panel__features {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.rag-maturity-panel__features li + li {
+  margin-top: 4px;
+}
+
 .team-aggregate-missing {
   padding: 12px 14px;
   margin-bottom: 16px;

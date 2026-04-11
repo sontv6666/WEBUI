@@ -8,6 +8,7 @@ import {
   extractInventoryExhaustive,
   extractOverallPicture,
   extractPromptRefinement,
+  extractRagMaturity,
   extractSuggestedQuestionsForTeam,
   extractSuggestedTestCases,
   fallbackSummary,
@@ -213,6 +214,11 @@ export function TeamDetail({
               extractOverallPicture(latestPerPush.structured_output)?.push_summary ||
               fallbackSummary(latestPerPush.status)}
           </p>
+          <div className="push-core-review-block push-core-review-block--snapshot">
+            {renderRagMaturityPanel(latestPerPush.structured_output, latestPerPush.rag_level)}
+            {renderCriteriaCommentsPerPush(latestPerPush.structured_output)}
+            {renderAssessmentBlock(latestPerPush.structured_output, "push")}
+          </div>
           <p className="latest-push-snapshot__hint">
             Luôn hiển thị bản <strong>per-push</strong> mới nhất theo thời gian cập nhật (toàn đội, không phụ thuộc trang
             phân trang). Dữ liệu đồng bộ từ Supabase khi có review mới (realtime + làm mới định kỳ).
@@ -246,6 +252,10 @@ export function TeamDetail({
             Nội dung lấy từ bản ghi <strong>tổng hợp đội</strong> mới nhất trong DB — khi có commit/pipeline mới, chạy lại workflow aggregate
             để cập nhật (realtime và polling 60s đã bật cho bảng này).
           </p>
+          <div className="push-core-review-block push-core-review-block--aggregate">
+            {renderRagMaturityPanel(aggregateRow.structured_output, aggregateRow.rag_level)}
+            {renderAssessmentBlock(aggregateRow.structured_output, "team")}
+          </div>
           <div className="detail-panels-region">
             {renderHistoricalSynthesis(aggregateRow.structured_output)}
             {renderExtendedLlmSections(aggregateRow.structured_output, { scope: "team" })}
@@ -371,6 +381,11 @@ export function TeamDetail({
                   extractOverallPicture(item.structured_output)?.push_summary ||
                   fallbackSummary(item.status)}
               </p>
+              <div className="push-core-review-block">
+                {renderRagMaturityPanel(item.structured_output, item.rag_level)}
+                {renderCriteriaCommentsPerPush(item.structured_output)}
+                {renderAssessmentBlock(item.structured_output, "push")}
+              </div>
               <div
                 className="push-detail-card__collapsible"
                 id={`push-detail-body-${cardKey}`}
@@ -382,7 +397,6 @@ export function TeamDetail({
                 <div className="detail-panels-region">
                   {renderExtendedLlmSections(item.structured_output, { scope: "push" })}
                   {renderHistoricalSynthesis(item.structured_output)}
-                  {renderCriteriaCommentsPerPush(item.structured_output)}
                   <details className="json-details">
                     <summary>Structured output — push này (JSON)</summary>
                     <pre>{JSON.stringify(item.structured_output || {}, null, 2)}</pre>
@@ -414,6 +428,67 @@ const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = 
   { key: "security", label: "Bảo mật" },
 ];
 
+function renderRagMaturityPanel(
+  structuredOutput: Record<string, unknown> | null,
+  columnRagLevel: string | null | undefined
+) {
+  const rm = extractRagMaturity(structuredOutput);
+  const col = (columnRagLevel && columnRagLevel.trim()) || "";
+  const fromStruct = (rm?.level && rm.level.trim()) || "";
+  const features = rm?.features_detected ?? [];
+
+  if (features.length === 0) {
+    if (!fromStruct) return null;
+    if (fromStruct === col) return null;
+  }
+
+  const levelLine = fromStruct || col || null;
+
+  return (
+    <div className="criteria-box rag-maturity-panel" aria-label="Mức RAG và tính năng phát hiện">
+      <SectionLabel icon="◎">RAG — mức độ và tính năng (từ LLM)</SectionLabel>
+      {levelLine ? (
+        <p className="rag-maturity-panel__level">
+          <span className="rag-maturity-panel__label">Mức</span> {levelLine}
+        </p>
+      ) : null}
+      {features.length > 0 ? (
+        <ul className="rag-maturity-panel__features">
+          {features.map((f) => (
+            <li key={f}>{f}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function renderAssessmentBlock(structuredOutput: Record<string, unknown> | null, scope: "push" | "team") {
+  const assessment = extractAssessment(structuredOutput);
+  if (!assessment) return null;
+  const hasAny = ASSESSMENT_LABELS.some(({ key }) => Boolean((assessment[key] as string | undefined)?.trim()));
+  if (!hasAny) return null;
+  const title =
+    scope === "team" ? "Đánh giá (cấp đội / toàn hệ thống)" : "Đánh giá chi tiết (assessment)";
+  return (
+    <div className="criteria-box llm-extended-block assessment-always-visible">
+      <div className="llm-section-chunk">
+        <SectionLabel icon="◎">{title}</SectionLabel>
+        {ASSESSMENT_LABELS.map(({ key, label }) => {
+          const text = (assessment[key] as string | undefined)?.trim();
+          if (!text) return null;
+          return (
+            <div key={key} className="assessment-row">
+              <span className="criteria-item-label">{label}</span>
+              <ProsePre>{text}</ProsePre>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CopyTextButton({ text, children }: { text: string; children: ReactNode }) {
   const [done, setDone] = useState(false);
   return (
@@ -441,7 +516,6 @@ function renderExtendedLlmSections(
 ) {
   const scope = options?.scope ?? "push";
   const inv = extractInventoryExhaustive(structuredOutput);
-  const assessment = extractAssessment(structuredOutput);
   const aiTests = extractSuggestedTestCases(structuredOutput);
   const questions = extractSuggestedQuestionsForTeam(structuredOutput);
   const promptHint = extractPromptRefinement(structuredOutput);
@@ -449,22 +523,19 @@ function renderExtendedLlmSections(
   const hasInventory =
     inv &&
     INVENTORY_LABELS.some(({ key }) => Array.isArray(inv[key]) && (inv[key] as string[]).length > 0);
-  const hasAssessment =
-    assessment && ASSESSMENT_LABELS.some(({ key }) => Boolean((assessment[key] as string | undefined)?.trim()));
   const hasAiTests = Boolean(aiTests && aiTests.length > 0);
   const skeletonTests = !hasAiTests && hasInventory && inv ? buildSkeletonTestCasesFromInventory(inv) : [];
   const hasSkeletonTests = skeletonTests.length > 0;
   const hasQuestions = Boolean(questions && questions.length > 0);
 
-  if (!hasInventory && !hasAssessment && !hasAiTests && !hasSkeletonTests && !hasQuestions && !promptHint) return null;
+  if (!hasInventory && !hasAiTests && !hasSkeletonTests && !hasQuestions && !promptHint) return null;
 
   const copyTestBundle = [...(aiTests ?? []), ...skeletonTests].join("\n\n---\n\n");
-  const hasCoreBlock = Boolean((hasInventory && inv) || (hasAssessment && assessment));
+  const hasCoreBlock = Boolean(hasInventory && inv);
   const hasDualPanels = (hasAiTests || hasSkeletonTests) && hasQuestions;
 
   const invTitle =
     scope === "team" ? "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" : "Danh mục công nghệ (liệt kê đầy đủ)";
-  const assessmentTitle = scope === "team" ? "Đánh giá (cấp đội / toàn hệ thống)" : "Đánh giá";
   const testSubtitle =
     scope === "team"
       ? "Kịch bản end-to-end, demo, hồi quy — theo bản tổng hợp đội mới nhất."
@@ -497,21 +568,6 @@ function renderExtendedLlmSections(
                   );
                 })}
               </div>
-            </div>
-          ) : null}
-          {hasAssessment && assessment ? (
-            <div className="llm-section-chunk">
-              <SectionLabel icon="◎">{assessmentTitle}</SectionLabel>
-              {ASSESSMENT_LABELS.map(({ key, label }) => {
-                const text = (assessment[key] as string | undefined)?.trim();
-                if (!text) return null;
-                return (
-                  <div key={key} className="assessment-row">
-                    <span className="criteria-item-label">{label}</span>
-                    <ProsePre>{text}</ProsePre>
-                  </div>
-                );
-              })}
             </div>
           ) : null}
         </div>
@@ -616,12 +672,10 @@ function renderExtendedLlmSections(
 }
 
 function renderHistoricalSynthesis(structuredOutput: Record<string, unknown> | null) {
-  if (!structuredOutput) return null;
-  const overall = structuredOutput.overall_picture;
-  if (!overall || typeof overall !== "object") return null;
-  const o = overall as Record<string, unknown>;
-  const hist = o.historical_synthesis;
-  const evo = o.evolution_notes;
+  const op = extractOverallPicture(structuredOutput);
+  if (!op) return null;
+  const hist = op.historical_synthesis;
+  const evo = op.evolution_notes;
   if (typeof hist !== "string" && typeof evo !== "string") return null;
   if (!hist && !evo) return null;
   return (
