@@ -157,11 +157,10 @@ export function useReviewsData() {
   }, [refreshGlobal, refreshLatest, refreshTeamHistory, refreshTeamAggregate, selectedTeam]);
 
   const stats = useMemo(() => {
-    const done = latestTeams.filter((x) => x.status === "done").length;
     const error = latestTeams.filter((x) => x.status === "error").length;
     const running = latestTeams.filter((x) => x.status === "llm_started").length;
     const latest = latestTeams[0]?.updated_at || null;
-    return { done, error, running, latest };
+    return { error, running, latest };
   }, [latestTeams]);
 
   return {

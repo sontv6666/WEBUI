@@ -92,11 +92,6 @@ export function TeamDetail({
         <div className="identity-first-block page-section">
           <div className="page-section-head">
             <h3 className="system-hero-title page-section-title">Hệ thống — mô tả &amp; công cụ</h3>
-            <p className="team-context-intro page-section-desc">
-            Khối đầu là <strong>hệ thống</strong> (phạm vi, chức năng) và <strong>công cụ</strong> team đang dùng. Tiếp theo là{" "}
-            <strong>tổng quan hệ thống</strong> theo lịch sử nhiều push. Phần <strong>tiêu chí R1</strong> nằm dưới —{" "}
-            <em>mỗi lần push một bản nhận xét</em>.
-            </p>
           </div>
           {(loadingAggregate || loading) && !hasIdentity ? (
             <Skeleton className="skeleton-line" style={{ height: 88 }} />
@@ -116,9 +111,6 @@ export function TeamDetail({
         <div className="aggregate-panel page-section">
           <div className="page-section-head">
             <h3 className="aggregate-heading page-section-title">Tổng quan hệ thống</h3>
-            <p className="team-context-intro page-section-desc" style={{ marginTop: 0 }}>
-              Tổng hợp cấp team: diễn biến và trạng thái hiện tại của <strong>hệ thống</strong>. Không thay cho rubric R1 ở từng push.
-            </p>
           </div>
           {loadingAggregate && (
             <div className="state-row">
@@ -157,9 +149,6 @@ export function TeamDetail({
       {teamId ? (
         <div className="page-section-head push-list-head">
           <h3 className="subsection-title page-section-title">Theo từng lần push</h3>
-          <p className="team-context-intro page-section-desc" style={{ marginTop: 0, marginBottom: 0 }}>
-            Mỗi thẻ = một push đã review ({rows.length} bản ghi). <strong>R1_01–R1_05</strong> là tiêu chí <strong>theo push</strong>. Phân trang: {PUSH_LIST_PAGE_SIZE} push/trang.
-          </p>
         </div>
       ) : null}
       {loading && (

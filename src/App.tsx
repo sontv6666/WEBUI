@@ -89,16 +89,6 @@ export default function App() {
       <header className="topbar">
         <div className="brand-block">
           <h1>Hackathon Review</h1>
-          <p className="sub">
-            <strong>Dashboard giám khảo</strong> — theo dõi kết quả review AI theo từng push/commit. Luồng: đội push code →
-            pipeline phân tích (AI) → lưu kết quả → hiển thị tại đây. Mỗi dòng trên Timeline là một bản ghi per-push đã xử lý;
-            trang chi tiết đội có tổng quan lịch sử, từng push, danh mục công nghệ, nhận xét tiêu chí, test case và câu hỏi gợi ý
-            — Hackathon RAG &amp; Agent.
-          </p>
-          <p className="pipeline-disclaimer">
-            Lịch lấy commit và chạy review do pipeline cấu hình (ví dụ n8n: cron, webhook…); màn hình này chỉ đọc dữ liệu đã
-            ghi nhận, không cấu hình hay kích hoạt pipeline.
-          </p>
         </div>
         <nav className="nav">
           <NavLink to="/teams" className={({ isActive }) => (isActive ? "active" : undefined)}>
@@ -116,7 +106,6 @@ export default function App() {
           element={
             <>
               <section className="kpi-grid">
-                <KpiCard label="Hoàn thành" value={stats.done} />
                 <KpiCard label="Lỗi" value={stats.error} />
                 <KpiCard label="Đang chạy" value={stats.running} />
                 <KpiCard
@@ -138,12 +127,7 @@ export default function App() {
                 <section className="panel timeline page-section">
                   <div className="page-section-head">
                     <h2 className="panel-title page-section-title">Lịch sử review (toàn cục)</h2>
-                    <p className="page-section-desc">
-                      Mỗi dòng là kết quả pipeline cho <strong>một push</strong> (bản ghi per-push). <strong>Nhấp một lần</strong>{" "}
-                      vào dòng để mở <strong>trang chi tiết đội</strong> (cột bên phải trên Timeline, hoặc{" "}
-                      <code>/teams/…</code>). Thanh bên dưới tiêu đề cho biết bố cục, số push/đội và phân trang; chỉ phần danh sách
-                      là vùng cuộn.
-                    </p>
+                    <p className="page-section-desc">Nhấp một dòng để mở chi tiết đội.</p>
                   </div>
                   {loadingGlobal && (
                     <div className="timeline-shell">
@@ -238,11 +222,6 @@ export default function App() {
                   )}
                 </select>
               </div>
-              <p className="sub page-hero" style={{ marginTop: 0 }}>
-                <strong>Bảng đội cho giám khảo</strong> — dropdown phía trên để mở nhanh trang chi tiết đội (commit, R1, test case…).
-                Hoặc <strong>nhấp một lần vào thẻ đội</strong> bên dưới. Phần <em>Các lần push đã nhận xét</em> trong thẻ chỉ mở/đóng
-                danh sách — không chuyển trang.
-              </p>
               <TeamsTable
                 rows={latestTeams}
                 commits={globalFeed.filter(isPerPushReview)}
@@ -286,27 +265,12 @@ function TimelineLayoutMeta({
   pageSize: number;
 }) {
   return (
-    <div className="timeline-layout-meta" role="status" aria-label="Bố cục trang và thống kê timeline">
-      <div className="timeline-layout-meta__layout">
-        <span className="timeline-layout-meta__layout-label">Panel / cột</span>
-        <p className="timeline-layout-meta__layout-text timeline-layout-meta__layout-text--wide">
-          Đang xem dạng <strong>hai cột</strong> (màn rộng ≥ 1100px): cột trái là Timeline, cột phải là chi tiết đội.
-        </p>
-        <p className="timeline-layout-meta__layout-text timeline-layout-meta__layout-text--narrow">
-          Đang xem dạng <strong>một cột</strong> (màn hẹp): Timeline trên, khối chi tiết đội xếp bên dưới.
-        </p>
-      </div>
-      <ul className="timeline-layout-meta__stats">
-        <li>
-          Sau tìm kiếm: <strong>{totalPushes}</strong> push · <strong>{uniqueTeams}</strong> đội (không trùng)
-        </li>
-        <li>
-          Trang hiện tại: <strong>{itemsOnPage}</strong> push · <strong>{uniqueTeamsOnPage}</strong> đội
-        </li>
-        <li>
-          Kích thước trang: tối đa <strong>{pageSize}</strong> push — dùng phân trang trên/dưới danh sách
-        </li>
-      </ul>
+    <div className="timeline-layout-meta" role="status" aria-label="Thống kê timeline">
+      <p className="timeline-layout-meta__compact">
+        Sau tìm kiếm: <strong>{totalPushes}</strong> push · <strong>{uniqueTeams}</strong> đội · trang này:{" "}
+        <strong>{itemsOnPage}</strong> push · <strong>{uniqueTeamsOnPage}</strong> đội · tối đa{" "}
+        <strong>{pageSize}</strong> push/trang
+      </p>
     </div>
   );
 }
@@ -423,13 +387,11 @@ function TeamCommitPage({
           </span>
           <span className="back-nav__copy">
             <span className="back-nav__title">Quay lại bảng đội</span>
-            <span className="back-nav__subtitle">Xem tất cả đội · chọn đội khác</span>
           </span>
         </Link>
       </nav>
       <div className="panel-head panel-head--detail">
         <h2 className="panel-title">Chi tiết đội &amp; hệ thống</h2>
-        <p className="panel-head-hint">Bạn đang xem một đội cụ thể. Dùng nút trên để về danh sách.</p>
       </div>
       <TeamDetail
         teamId={selectedTeam}

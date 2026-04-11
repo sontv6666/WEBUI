@@ -64,7 +64,7 @@ export function TeamsTable({
       </div>
 
       <p className="teams-table-intro page-section-desc">
-        Ô tìm kiếm phía trên · tối đa <strong>{TEAMS_PAGE_SIZE}</strong> đội/trang. <strong>Một cú nhấp</strong> vào thẻ (khu vực trắng / tóm tắt) để mở trang chi tiết; mở khối &quot;Các lần push&quot; bên trong <em>không</em> thoát trang.
+        Nhấp thẻ đội để mở chi tiết · tối đa <strong>{TEAMS_PAGE_SIZE}</strong> đội/trang.
       </p>
 
       <div className="team-groups">
