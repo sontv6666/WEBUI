@@ -252,103 +252,147 @@ function renderExtendedLlmSections(structuredOutput: Record<string, unknown> | n
   if (!hasInventory && !hasAssessment && !hasAiTests && !hasSkeletonTests && !hasQuestions && !promptHint) return null;
 
   const copyTestBundle = [...(aiTests ?? []), ...skeletonTests].join("\n\n---\n\n");
+  const hasCoreBlock = Boolean((hasInventory && inv) || (hasAssessment && assessment));
+  const hasDualPanels = (hasAiTests || hasSkeletonTests) && hasQuestions;
 
   return (
-    <div className="criteria-box llm-extended-block">
-      {hasInventory && inv ? (
-        <div style={{ marginBottom: 14 }}>
-          <SectionLabel icon="◇">Danh mục công nghệ (liệt kê đầy đủ)</SectionLabel>
-          <div className="inventory-grid">
-            {INVENTORY_LABELS.map(({ key, label }) => {
-              const arr = (inv[key] as string[] | undefined) ?? [];
-              if (!arr.length) return null;
-              return (
-                <div key={key} className="inventory-category">
-                  <span className="inventory-cat-label">{label}</span>
-                  <ul className="inventory-tags">
-                    {arr.map((t) => (
-                      <li key={t}>{t}</li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-      {hasAssessment && assessment ? (
-        <div style={{ marginBottom: 14 }}>
-          <SectionLabel icon="◎">Đánh giá (ưu / khuyết / cải thiện · ngữ cảnh · cấu trúc · hoàn thiện · bảo mật)</SectionLabel>
-          <p className="llm-block-hint">
-            Bảy khối: Ưu điểm, Khuyết điểm, Điểm cần cải thiện (ưu tiên hành động), Ngữ cảnh, Cấu trúc source, Độ hoàn thiện, Bảo mật — do AI trích từ diff/review.
-          </p>
-          {ASSESSMENT_LABELS.map(({ key, label }) => {
-            const text = (assessment[key] as string | undefined)?.trim();
-            if (!text) return null;
-            return (
-              <div key={key} style={{ marginTop: 10 }}>
-                <span className="criteria-item-label">{label}</span>
-                <ProsePre>{text}</ProsePre>
+    <div className="llm-review-sections">
+      {hasCoreBlock ? (
+        <div className="criteria-box llm-extended-block">
+          {hasInventory && inv ? (
+            <div className="llm-section-chunk">
+              <SectionLabel icon="◇">Danh mục công nghệ (liệt kê đầy đủ)</SectionLabel>
+              <div className="inventory-grid">
+                {INVENTORY_LABELS.map(({ key, label }) => {
+                  const arr = (inv[key] as string[] | undefined) ?? [];
+                  if (!arr.length) return null;
+                  return (
+                    <div key={key} className="inventory-category">
+                      <span className="inventory-cat-label">{label}</span>
+                      <ul className="inventory-tags">
+                        {arr.map((t) => (
+                          <li key={t}>{t}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ) : null}
+          {hasAssessment && assessment ? (
+            <div className="llm-section-chunk">
+              <SectionLabel icon="◎">Đánh giá (ưu / khuyết / cải thiện · ngữ cảnh · cấu trúc · hoàn thiện · bảo mật)</SectionLabel>
+              <p className="llm-block-hint">
+                Bảy khối: Ưu điểm, Khuyết điểm, Điểm cần cải thiện (ưu tiên hành động), Ngữ cảnh, Cấu trúc source, Độ hoàn thiện, Bảo mật — do AI trích từ diff/review.
+              </p>
+              {ASSESSMENT_LABELS.map(({ key, label }) => {
+                const text = (assessment[key] as string | undefined)?.trim();
+                if (!text) return null;
+                return (
+                  <div key={key} className="assessment-row">
+                    <span className="criteria-item-label">{label}</span>
+                    <ProsePre>{text}</ProsePre>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       ) : null}
-      {(hasAiTests || hasSkeletonTests) && (
-        <div style={{ marginBottom: hasQuestions || promptHint ? 14 : 0 }} className="test-case-panel">
-          <div className="test-case-panel-head">
-            <div>
-              <SectionLabel icon="✓">Test case gợi ý (AI + khung bổ trợ)</SectionLabel>
-              <p className="llm-block-hint">
-                AI sinh kịch bản theo stack đội; nếu chưa có, UI tự ghép khung tối thiểu từ danh mục công nghệ. Dùng để tự kiểm thử hoặc chấm.
-              </p>
-            </div>
-            {(hasAiTests || hasSkeletonTests) && copyTestBundle.trim() ? (
-              <CopyTextButton text={copyTestBundle}>Sao chép tất cả test case</CopyTextButton>
-            ) : null}
-          </div>
-          {hasAiTests && aiTests ? (
-            <>
-              <span className="sub-block-title">Do AI phân tích hệ thống</span>
-              <ol className="test-case-list">
-                {aiTests.map((t, i) => (
-                  <li key={i}>
-                    <ProsePre>{t}</ProsePre>
+
+      {(hasAiTests || hasSkeletonTests || hasQuestions) && (
+        <div className={`review-panels-grid ${hasDualPanels ? "review-panels-grid--split" : ""}`}>
+          {(hasAiTests || hasSkeletonTests) && (
+            <section
+              className="review-panel review-panel--tests"
+              aria-labelledby="review-panel-tests-heading"
+            >
+              <header className="review-panel__head">
+                <div>
+                  <h4 id="review-panel-tests-heading" className="review-panel__title">
+                    <span className="review-panel__icon" aria-hidden>
+                      ✓
+                    </span>
+                    Test case gợi ý
+                  </h4>
+                  <p className="review-panel__subtitle">
+                    Kịch bản kiểm thử — AI theo stack đội; khung bổ sung khi chưa có đủ từ AI.
+                  </p>
+                </div>
+                {copyTestBundle.trim() ? (
+                  <CopyTextButton text={copyTestBundle}>Sao chép tất cả</CopyTextButton>
+                ) : null}
+              </header>
+              <div className="review-panel__body">
+                {hasAiTests && aiTests ? (
+                  <div className="review-panel__group">
+                    <span className="review-panel__group-label">Từ phân tích AI</span>
+                    <ul className="test-case-cards">
+                      {aiTests.map((t, i) => (
+                        <li key={`ai-${i}`} className="test-case-card">
+                          <span className="test-case-card__badge">TC {String(i + 1).padStart(2, "0")}</span>
+                          <div className="test-case-card__body">
+                            <ProsePre>{t}</ProsePre>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {hasSkeletonTests ? (
+                  <div className="review-panel__group">
+                    <span className="review-panel__group-label review-panel__group-label--muted">Khung gợi ý (theo danh mục)</span>
+                    <ul className="test-case-cards test-case-cards--skeleton">
+                      {skeletonTests.map((t, i) => (
+                        <li key={`sk-${i}`} className="test-case-card test-case-card--skeleton">
+                          <span className="test-case-card__badge test-case-card__badge--muted">+{i + 1}</span>
+                          <div className="test-case-card__body">
+                            <ProsePre>{t}</ProsePre>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          )}
+
+          {hasQuestions && questions ? (
+            <section
+              className="review-panel review-panel--questions"
+              aria-labelledby="review-panel-questions-heading"
+            >
+              <header className="review-panel__head">
+                <div>
+                  <h4 id="review-panel-questions-heading" className="review-panel__title">
+                    <span className="review-panel__icon review-panel__icon--questions" aria-hidden>
+                      ?
+                    </span>
+                    Câu hỏi gợi ý cho đội
+                  </h4>
+                  <p className="review-panel__subtitle">Demo / chấm / phỏng vấn — tách riêng khỏi test case.</p>
+                </div>
+                <CopyTextButton text={questions.join("\n\n")}>Sao chép tất cả</CopyTextButton>
+              </header>
+              <ul className="question-cards">
+                {questions.map((q, i) => (
+                  <li key={i} className="question-card">
+                    <span className="question-card__badge">Q{i + 1}</span>
+                    <div className="question-card__body">
+                      <ProsePre>{q}</ProsePre>
+                    </div>
                   </li>
                 ))}
-              </ol>
-            </>
-          ) : null}
-          {hasSkeletonTests ? (
-            <>
-              <span className="sub-block-title">Khung kiểm thử bổ sung (tự sinh từ danh mục)</span>
-              <ol className="test-case-list skeleton-tests">
-                {skeletonTests.map((t, i) => (
-                  <li key={i}>
-                    <ProsePre>{t}</ProsePre>
-                  </li>
-                ))}
-              </ol>
-            </>
+              </ul>
+            </section>
           ) : null}
         </div>
       )}
-      {hasQuestions && questions ? (
-        <div style={{ marginBottom: promptHint ? 14 : 0 }}>
-          <SectionLabel icon="?">Câu hỏi gợi ý cho đội (demo / chấm)</SectionLabel>
-          <p className="llm-block-hint">Gợi ý phỏng vấn — có thể hỏi thêm khi team trình bày.</p>
-          <ol className="questions-for-team-list">
-            {questions.map((q, i) => (
-              <li key={i}>
-                <ProsePre>{q}</ProsePre>
-              </li>
-            ))}
-          </ol>
-          <CopyTextButton text={questions.join("\n")}>Sao chép danh sách câu hỏi</CopyTextButton>
-        </div>
-      ) : null}
+
       {promptHint ? (
-        <div>
+        <div className="criteria-box prompt-refine-panel">
           <SectionLabel icon="→">Gợi ý tối ưu prompt (so với prompt đội đang dùng)</SectionLabel>
           <ProsePre>{promptHint}</ProsePre>
         </div>
