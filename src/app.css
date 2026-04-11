@@ -580,34 +580,6 @@ body {
   color: #3730a3;
 }
 
-.reviewer-focus-hint {
-  margin-bottom: 16px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--accent-soft) 0%, var(--bg-elevated) 38%);
-  box-shadow: var(--shadow-sm);
-}
-
-.reviewer-focus-hint__lead {
-  margin: 0 0 10px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text);
-}
-
-.reviewer-focus-hint__list {
-  margin: 0;
-  padding-left: 1.15rem;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-muted);
-}
-
-.reviewer-focus-hint__list li + li {
-  margin-top: 6px;
-}
-
 .team-panel--compact-panels .detail-panels-region {
   display: none;
 }

@@ -168,25 +168,6 @@ export function TeamDetail({
       ) : null}
 
       {teamId ? (
-        <aside className="reviewer-focus-hint" aria-label="Gợi ý cho ban chấm">
-          <p className="reviewer-focus-hint__lead">
-            Khi chấm, đối chiếu rõ <strong>pipeline RAG</strong> và <strong>phi chức năng</strong> với rubric đã hiển thị
-            (mức RAG, bảo mật, độ đầy đủ, R1).
-          </p>
-          <ul className="reviewer-focus-hint__list">
-            <li>
-              <strong>RAG:</strong> ingest nguồn, chunking, embedding, retrieval, trích dẫn (citation), độ tươi dữ liệu
-              so với repo/commit.
-            </li>
-            <li>
-              <strong>Phi chức năng:</strong> tin cậy kết quả; quan sát được (logging/metrics); bảo mật (secret, đầu vào);
-              hiệu năng/latency; trải nghiệm khi lỗi — khớp các khối đánh giá trong UI.
-            </li>
-          </ul>
-        </aside>
-      ) : null}
-
-      {teamId ? (
         <div className="identity-first-block page-section">
           <div className="page-section-head">
             <h3 className="system-hero-title page-section-title">Hệ thống — mô tả &amp; công cụ</h3>
