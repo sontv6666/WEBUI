@@ -144,9 +144,6 @@ export default function App() {
           <NavLink to="/teams" end className={({ isActive }) => (isActive ? "active" : undefined)}>
             Đội thi
           </NavLink>
-          <NavLink to="/teams/all" className={({ isActive }) => (isActive ? "active" : undefined)}>
-            Tất cả đội
-          </NavLink>
           <NavLink to="/" className={({ isActive }) => (isActive ? "active" : undefined)} end>
             Timeline
           </NavLink>
@@ -303,13 +300,8 @@ export default function App() {
           path="/teams"
           element={
             <section className="panel page-panel">
-              <div className="team-header team-header--with-link">
-                <div className="team-header__row">
-                  <h2 className="panel-title">Bảng đội</h2>
-                  <Link className="link-button link-button--accent" to="/teams/all">
-                    Tất cả đội (lưới) →
-                  </Link>
-                </div>
+              <div className="team-header">
+                <h2 className="panel-title">Bảng đội</h2>
                 <div className="team-picker-toolbar" role="group" aria-label="Chọn đội và mật độ lưới">
                   <div className="team-picker-density" role="group" aria-label="Số đội mỗi hàng">
                     <span className="team-picker-density__label">Hàng:</span>
