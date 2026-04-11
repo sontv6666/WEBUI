@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import type { ReviewItem, TeamLatestReview } from "../types/reviews";
 
@@ -6,6 +6,14 @@ import type { ReviewItem, TeamLatestReview } from "../types/reviews";
 export const GLOBAL_FEED_QUERY_LIMIT = 1000;
 const GLOBAL_LIMIT = GLOBAL_FEED_QUERY_LIMIT;
 const TEAM_LIMIT = 50;
+
+/** Gộp burst realtime (llm_started → done) để tránh nhiều request liên tiếp. */
+const REALTIME_DEBOUNCE_MS = 650;
+
+export type RefreshOptions = {
+  /** true: không bật loading skeleton (dùng cho realtime + polling nền). */
+  silent?: boolean;
+};
 
 export function useReviewsData() {
   const [globalFeed, setGlobalFeed] = useState<ReviewItem[]>([]);
@@ -16,8 +24,12 @@ export function useReviewsData() {
   const [loadingLatest, setLoadingLatest] = useState(true);
   const [loadingTeam, setLoadingTeam] = useState(false);
 
-  const refreshGlobal = useCallback(async () => {
-    setLoadingGlobal(true);
+  const selectedTeamRef = useRef(selectedTeam);
+  selectedTeamRef.current = selectedTeam;
+
+  const refreshGlobal = useCallback(async (opts?: RefreshOptions) => {
+    const silent = opts?.silent === true;
+    if (!silent) setLoadingGlobal(true);
     const { data, error } = await supabase
       .from("ai_reviews")
       .select("*")
@@ -26,15 +38,16 @@ export function useReviewsData() {
     if (error) {
       console.error("Failed to load global timeline", error);
       setGlobalFeed([]);
-      setLoadingGlobal(false);
+      if (!silent) setLoadingGlobal(false);
       return;
     }
     setGlobalFeed((data as ReviewItem[]) || []);
-    setLoadingGlobal(false);
+    if (!silent) setLoadingGlobal(false);
   }, []);
 
-  const refreshLatest = useCallback(async () => {
-    setLoadingLatest(true);
+  const refreshLatest = useCallback(async (opts?: RefreshOptions) => {
+    const silent = opts?.silent === true;
+    if (!silent) setLoadingLatest(true);
     const { data, error } = await supabase
       .from("team_latest_reviews")
       .select("*")
@@ -42,20 +55,21 @@ export function useReviewsData() {
     if (error) {
       console.error("Failed to load latest team reviews", error);
       setLatestTeams([]);
-      setLoadingLatest(false);
+      if (!silent) setLoadingLatest(false);
       return;
     }
     setLatestTeams((data as TeamLatestReview[]) || []);
-    setLoadingLatest(false);
+    if (!silent) setLoadingLatest(false);
   }, []);
 
-  const refreshTeamHistory = useCallback(async (teamId: string) => {
+  const refreshTeamHistory = useCallback(async (teamId: string, opts?: RefreshOptions) => {
+    const silent = opts?.silent === true;
     if (!teamId) {
       setTeamFeed([]);
-      setLoadingTeam(false);
+      if (!silent) setLoadingTeam(false);
       return;
     }
-    setLoadingTeam(true);
+    if (!silent) setLoadingTeam(true);
     const { data, error } = await supabase
       .from("ai_reviews")
       .select("*")
@@ -65,11 +79,11 @@ export function useReviewsData() {
     if (error) {
       console.error("Failed to load team timeline", error);
       setTeamFeed([]);
-      setLoadingTeam(false);
+      if (!silent) setLoadingTeam(false);
       return;
     }
     setTeamFeed((data as ReviewItem[]) || []);
-    setLoadingTeam(false);
+    if (!silent) setLoadingTeam(false);
   }, []);
 
   useEffect(() => {
@@ -92,39 +106,42 @@ export function useReviewsData() {
   }, [latestTeams, selectedTeam]);
 
   useEffect(() => {
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const runSilentRefresh = () => {
+      void refreshGlobal({ silent: true });
+      void refreshLatest({ silent: true });
+      const st = selectedTeamRef.current;
+      if (st) void refreshTeamHistory(st, { silent: true });
+    };
+
     const channel = supabase
       .channel("judge-dashboard-reviews")
-      .on("postgres_changes", { event: "*", schema: "public", table: "ai_reviews" }, (payload) => {
-        void refreshGlobal();
-        void refreshLatest();
-        const changedTeam =
-          (payload.new as { team_id?: string } | null)?.team_id ||
-          (payload.old as { team_id?: string } | null)?.team_id;
-        if (selectedTeam && changedTeam && changedTeam === selectedTeam) {
-          void refreshTeamHistory(selectedTeam);
-        }
+      .on("postgres_changes", { event: "*", schema: "public", table: "ai_reviews" }, () => {
+        window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(runSilentRefresh, REALTIME_DEBOUNCE_MS);
       })
       .subscribe();
 
     return () => {
+      window.clearTimeout(debounceTimer);
       void supabase.removeChannel(channel);
     };
-  }, [refreshGlobal, refreshLatest, refreshTeamHistory, selectedTeam]);
+  }, [refreshGlobal, refreshLatest, refreshTeamHistory]);
 
-  // Fallback polling in case realtime socket is temporarily disrupted.
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void refreshGlobal();
-      void refreshLatest();
-      if (selectedTeam) {
-        void refreshTeamHistory(selectedTeam);
-      }
+      if (document.visibilityState !== "visible") return;
+      void refreshGlobal({ silent: true });
+      void refreshLatest({ silent: true });
+      const st = selectedTeamRef.current;
+      if (st) void refreshTeamHistory(st, { silent: true });
     }, 60000);
 
     return () => {
       window.clearInterval(timer);
     };
-  }, [refreshGlobal, refreshLatest, refreshTeamHistory, selectedTeam]);
+  }, [refreshGlobal, refreshLatest, refreshTeamHistory]);
 
   const stats = useMemo(() => {
     const error = latestTeams.filter((x) => x.status === "error").length;
@@ -145,4 +162,3 @@ export function useReviewsData() {
     stats,
   };
 }
-

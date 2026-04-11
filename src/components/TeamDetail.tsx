@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
   buildSkeletonTestCasesFromInventory,
@@ -107,10 +107,35 @@ export function TeamDetail({
   const isPushDetailExpanded = (key: string) =>
     pushDetailOpen[key] !== undefined ? pushDetailOpen[key] : key === latestPerPushKey;
 
+  const expandAllPushDetailsOnPage = useCallback(() => {
+    setPushDetailOpen((prev) => {
+      const next = { ...prev };
+      for (const item of paginatedPushRows) {
+        next[pushCardKey(item)] = true;
+      }
+      return next;
+    });
+  }, [paginatedPushRows]);
+
+  const collapseAllPushDetailsOnPage = useCallback(() => {
+    setPushDetailOpen((prev) => {
+      const next = { ...prev };
+      for (const item of paginatedPushRows) {
+        next[pushCardKey(item)] = false;
+      }
+      return next;
+    });
+  }, [paginatedPushRows]);
+
   return (
     <section className={`panel team-panel ${panelsExpanded ? "" : "team-panel--compact-panels"}`}>
       <div className="team-header">
-        <h2 className="panel-title">Đội &amp; hệ thống</h2>
+        <div className="team-header__titles">
+          <h2 className="panel-title">Đội &amp; hệ thống</h2>
+          <p className="team-panel-subtitle">
+            Ưu tiên so sánh đội qua chất lượng RAG và các khía cạnh phi chức năng, không chỉ tính năng.
+          </p>
+        </div>
         <select value={teamId} onChange={(e) => onTeamChange(e.target.value)} aria-label="Chọn đội">
           {teams.map((team) => (
             <option key={team.teamId} value={team.teamId}>
@@ -140,6 +165,25 @@ export function TeamDetail({
             </button>
           </div>
         </div>
+      ) : null}
+
+      {teamId ? (
+        <aside className="reviewer-focus-hint" aria-label="Gợi ý cho ban chấm">
+          <p className="reviewer-focus-hint__lead">
+            Khi chấm, đối chiếu rõ <strong>pipeline RAG</strong> và <strong>phi chức năng</strong> với rubric đã hiển thị
+            (mức RAG, bảo mật, độ đầy đủ, R1).
+          </p>
+          <ul className="reviewer-focus-hint__list">
+            <li>
+              <strong>RAG:</strong> ingest nguồn, chunking, embedding, retrieval, trích dẫn (citation), độ tươi dữ liệu
+              so với repo/commit.
+            </li>
+            <li>
+              <strong>Phi chức năng:</strong> tin cậy kết quả; quan sát được (logging/metrics); bảo mật (secret, đầu vào);
+              hiệu năng/latency; trải nghiệm khi lỗi — khớp các khối đánh giá trong UI.
+            </li>
+          </ul>
+        </aside>
       ) : null}
 
       {teamId ? (
@@ -243,8 +287,18 @@ export function TeamDetail({
       ) : null}
 
       {teamId ? (
-        <div className="page-section-head push-list-head">
+        <div className="page-section-head push-list-head push-list-head--with-actions">
           <h3 className="subsection-title page-section-title">Theo từng lần push</h3>
+          {!loading && perPushRows.length > 0 ? (
+            <div className="push-list-head__actions" role="group" aria-label="Mở hoặc thu chi tiết mọi push trên trang này">
+              <button type="button" className="push-list-page-toolbtn" onClick={expandAllPushDetailsOnPage}>
+                Mở rộng tất cả (trang này)
+              </button>
+              <button type="button" className="push-list-page-toolbtn" onClick={collapseAllPushDetailsOnPage}>
+                Thu gọn tất cả (trang này)
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {loading && (
