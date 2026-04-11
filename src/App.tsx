@@ -233,9 +233,9 @@ export default function App() {
                   teamId={selectedTeam}
                   teams={teamOptions}
                   onTeamChange={setSelectedTeam}
-                  onOpenTeam={openTeamDetail}
                   rows={teamFeed}
                   loading={loadingTeam}
+                  homeSidebar
                 />
               </main>
             </>

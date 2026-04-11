@@ -757,6 +757,15 @@ body {
   min-width: 0;
 }
 
+/* Cột phải trang chủ: gọn, chỉ snapshot push */
+.team-panel--home-sidebar .team-header {
+  margin-bottom: 12px;
+}
+
+.team-panel--home-sidebar .latest-push-snapshot {
+  margin-top: 0;
+}
+
 .team-panel-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -969,6 +978,17 @@ body {
   margin-bottom: 16px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+
+.team-aggregate-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.team-aggregate-sections .review-panel {
+  margin-bottom: 0;
 }
 
 .push-core-review-details--aggregate {

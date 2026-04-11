@@ -30,6 +30,109 @@ import { SmbScaleAdvisoryPanel, TeamAggregateCriteriaSections } from "./RubricAn
 
 const PUSH_LIST_PAGE_SIZE = 5;
 
+const INVENTORY_LABELS: Array<{ key: keyof InventoryExhaustive; label: string }> = [
+  { key: "llm_models_and_apis", label: "LLM / API" },
+  { key: "frameworks_and_runtimes", label: "Framework & runtime" },
+  { key: "vector_databases", label: "Vector DB" },
+  { key: "agent_orchestration", label: "Agent / orchestration" },
+  { key: "third_party_integrations", label: "Tích hợp khác" },
+];
+
+const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = [
+  { key: "advantages", label: "Ưu điểm" },
+  { key: "disadvantages", label: "Khuyết điểm" },
+  { key: "improvement_areas", label: "Điểm cần cải thiện" },
+  { key: "context_and_fit", label: "Ngữ cảnh & đề bài" },
+  { key: "source_structure", label: "Cấu trúc source" },
+  { key: "completeness", label: "Độ hoàn thiện" },
+  { key: "security", label: "Bảo mật" },
+];
+
+type ExtendedLlmContext = {
+  inv: InventoryExhaustive | null;
+  hasInventory: boolean;
+  aiTests: string[] | null;
+  skeletonTests: string[];
+  questions: string[] | null;
+  promptHint: string | null;
+  hasAiTests: boolean;
+  hasSkeletonTests: boolean;
+  hasQuestions: boolean;
+  copyTestBundle: string;
+};
+
+function getExtendedLlmContext(structuredOutput: Record<string, unknown> | null): ExtendedLlmContext {
+  const inv = extractInventoryExhaustive(structuredOutput);
+  const aiTests = extractSuggestedTestCases(structuredOutput);
+  const questions = extractSuggestedQuestionsForTeam(structuredOutput);
+  const promptHint = extractPromptRefinement(structuredOutput);
+
+  const hasInventoryBlocks =
+    inv &&
+    INVENTORY_LABELS.some(({ key }) => Array.isArray(inv[key]) && (inv[key] as string[]).length > 0);
+  const hasAiTests = Boolean(aiTests && aiTests.length > 0);
+  const skeletonTests = !hasAiTests && hasInventoryBlocks && inv ? buildSkeletonTestCasesFromInventory(inv) : [];
+  const hasSkeletonTests = skeletonTests.length > 0;
+  const hasQuestions = Boolean(questions && questions.length > 0);
+  const copyTestBundle = [...(aiTests ?? []), ...skeletonTests].join("\n\n---\n\n");
+
+  return {
+    inv: inv ?? null,
+    hasInventory: Boolean(hasInventoryBlocks && inv),
+    aiTests: aiTests ?? null,
+    skeletonTests,
+    questions: questions ?? null,
+    promptHint,
+    hasAiTests,
+    hasSkeletonTests,
+    hasQuestions,
+    copyTestBundle,
+  };
+}
+
+function renderInventorySectionFromCtx(ctx: ExtendedLlmContext, scope: "push" | "team") {
+  if (!ctx.hasInventory || !ctx.inv) return null;
+  const inv = ctx.inv;
+  const invTitle =
+    scope === "team" ? "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" : "Danh mục công nghệ (liệt kê đầy đủ)";
+  return (
+    <div className="criteria-box llm-extended-block">
+      <div className="llm-section-chunk">
+        <SectionLabel icon="▤">{invTitle}</SectionLabel>
+        <div className="inventory-grid">
+          {INVENTORY_LABELS.map(({ key, label }) => {
+            const arr = (inv[key] as string[] | undefined) ?? [];
+            if (!arr.length) return null;
+            return (
+              <div key={key} className="inventory-category">
+                <span className="inventory-cat-label">{label}</span>
+                <ul className="inventory-tags">
+                  {arr.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function renderPromptRefinementFromCtx(ctx: ExtendedLlmContext) {
+  if (!ctx.promptHint) return null;
+  return (
+    <div className="criteria-box prompt-refine-panel">
+      <SectionLabel icon="→">Gợi ý tối ưu prompt — nên chỉnh gì</SectionLabel>
+      <p className="prompt-refine-panel__hint">
+        Chỉ liệt kê hạng mục cần tối ưu (LLM được hướng dẫn trả gạch đầu dòng ngắn); tránh sao chép cả prompt dài.
+      </p>
+      <ProsePre>{ctx.promptHint}</ProsePre>
+    </div>
+  );
+}
+
 function pickLatestAggregate(rows: ReviewItem[]): ReviewItem | null {
   const agg = rows.filter((r) => reviewKindOf(r) === "team_aggregate");
   if (agg.length === 0) return null;
@@ -74,6 +177,8 @@ export function TeamDetail({
   onOpenTeam,
   rows,
   loading,
+  /** Trang chủ (cột Timeline): chỉ đánh giá push mới nhất — không tổng hợp đội, không danh sách push. */
+  homeSidebar = false,
 }: {
   teamId: string;
   teams: Array<{ teamId: string; repoName?: string }>;
@@ -81,6 +186,7 @@ export function TeamDetail({
   onOpenTeam?: (teamId: string) => void;
   rows: ReviewItem[];
   loading: boolean;
+  homeSidebar?: boolean;
 }) {
   const [pushPage, setPushPage] = useState(1);
   const [panelsExpanded, setPanelsExpanded] = useState(true);
@@ -131,12 +237,18 @@ export function TeamDetail({
   }, [paginatedPushRows]);
 
   return (
-    <section className={`panel team-panel ${panelsExpanded ? "" : "team-panel--compact-panels"}`}>
+    <section
+      className={`panel team-panel ${homeSidebar ? "team-panel--home-sidebar" : ""} ${
+        panelsExpanded ? "" : "team-panel--compact-panels"
+      }`}
+    >
       <div className="team-header">
         <div className="team-header__titles">
           <h2 className="panel-title">Đội &amp; hệ thống</h2>
           <p className="team-panel-subtitle">
-            Ưu tiên so sánh đội qua chất lượng RAG và các khía cạnh phi chức năng, không chỉ tính năng.
+            {homeSidebar
+              ? "Bản per-push mới nhất của đội đang chọn."
+              : "Ưu tiên so sánh đội qua chất lượng RAG và các khía cạnh phi chức năng, không chỉ tính năng."}
           </p>
         </div>
         <select value={teamId} onChange={(e) => onTeamChange(e.target.value)} aria-label="Chọn đội">
@@ -148,7 +260,7 @@ export function TeamDetail({
         </select>
       </div>
 
-      {teamId ? (
+      {teamId && !homeSidebar ? (
         <div className="team-panel-toolbar" role="toolbar" aria-label="Thu gọn hoặc mở rộng panel chi tiết">
           <span className="team-panel-toolbar__hint">Panel chi tiết (đánh giá, test, câu hỏi, JSON)</span>
           <div className="team-panel-toolbar__actions">
@@ -170,7 +282,7 @@ export function TeamDetail({
         </div>
       ) : null}
 
-      {teamId ? (
+      {teamId && !homeSidebar ? (
         <div className="identity-first-block page-section">
           <div className="page-section-head">
             <h3 className="system-hero-title page-section-title">Hệ thống — mô tả &amp; công cụ</h3>
@@ -223,14 +335,22 @@ export function TeamDetail({
             "RAG & đánh giá chi tiết (push mới nhất) — nhấp để mở",
             "push-core-review-details--snapshot"
           )}
-          <p className="latest-push-snapshot__hint">
-            Luôn hiển thị bản <strong>per-push</strong> mới nhất theo thời gian cập nhật (toàn đội, không phụ thuộc trang
-            phân trang). Dữ liệu đồng bộ từ Supabase khi có review mới (realtime + làm mới định kỳ).
-          </p>
+          {!homeSidebar ? (
+            <p className="latest-push-snapshot__hint">
+              Luôn hiển thị bản <strong>per-push</strong> mới nhất theo thời gian cập nhật (toàn đội, không phụ thuộc trang
+              phân trang). Dữ liệu đồng bộ từ Supabase khi có review mới (realtime + làm mới định kỳ).
+            </p>
+          ) : null}
         </div>
       ) : null}
 
-      {teamId && !loading && aggregateRow ? (
+      {teamId && !loading && homeSidebar && !latestPerPush && rows.length > 0 ? (
+        <p className="state state--muted" role="status">
+          Chưa có bản ghi <strong>per-push</strong> cho đội này — không thể hiển thị đánh giá push mới nhất.
+        </p>
+      ) : null}
+
+      {teamId && !loading && !homeSidebar && aggregateRow ? (
         <article className="timeline-item team-aggregate-card" data-status={aggregateRow.status}>
           <div className="page-section-head team-aggregate-head">
             <h3 className="subsection-title page-section-title">Đánh giá toàn hệ thống</h3>
@@ -240,21 +360,25 @@ export function TeamDetail({
             Nội dung lấy từ bản ghi <strong>tổng hợp đội</strong> mới nhất trong DB — khi có commit/pipeline mới, chạy lại workflow aggregate
             để cập nhật (realtime và polling 60s đã bật cho bảng này).
           </p>
-          <div className="team-aggregate-review-stack">
-            {renderCollapsibleRagAndAssessment(
-              aggregateRow.structured_output,
-              aggregateRow.rag_level,
-              "team",
-              "RAG & đánh giá chi tiết (toàn hệ thống) — nhấp để mở",
-              "push-core-review-details--aggregate"
-            )}
-            {renderAggregateRubricAdvisoryPlaceholder(aggregateRow.structured_output)}
-            <TeamAggregateCriteriaSections structuredOutput={aggregateRow.structured_output} />
-            <SmbScaleAdvisoryPanel structuredOutput={aggregateRow.structured_output} />
-          </div>
-          <div className="detail-panels-region">
-            {renderHistoricalSynthesis(aggregateRow.structured_output)}
-            {renderExtendedLlmSections(aggregateRow.structured_output, { scope: "team" })}
+          <div className="detail-panels-region team-aggregate-sections">
+            {(() => {
+              const so = aggregateRow.structured_output;
+              const ctx = getExtendedLlmContext(so);
+              return (
+                <>
+                  {renderHistoricalSynthesis(so)}
+                  {renderInventorySectionFromCtx(ctx, "team")}
+                  {renderRagMaturityPanel(so, aggregateRow.rag_level)}
+                  {renderAssessmentBlock(so, "team")}
+                  <TeamAggregateCriteriaSections structuredOutput={so} />
+                  <SmbScaleAdvisoryPanel structuredOutput={so} />
+                  {renderPromptRefinementFromCtx(ctx)}
+                  {renderTestCasesPanel(ctx, "team", "aggregate")}
+                  {renderQuestionsPanel(ctx, "team", "aggregate")}
+                  {renderAggregateRubricAdvisoryPlaceholder(so)}
+                </>
+              );
+            })()}
             <details className="json-details">
               <summary>Structured output — tổng hợp đội (JSON)</summary>
               <pre>{JSON.stringify(aggregateRow.structured_output || {}, null, 2)}</pre>
@@ -263,7 +387,7 @@ export function TeamDetail({
         </article>
       ) : null}
 
-      {teamId && !loading && !aggregateRow && perPushRows.length > 0 ? (
+      {teamId && !loading && !homeSidebar && !aggregateRow && perPushRows.length > 0 ? (
         <div className="team-aggregate-missing" role="status">
           <p>
             <strong>Chưa có đánh giá tổng hợp toàn hệ thống</strong> (hàng <code>team_aggregate</code> trong{" "}
@@ -273,7 +397,7 @@ export function TeamDetail({
         </div>
       ) : null}
 
-      {teamId ? (
+      {teamId && !homeSidebar ? (
         <div className="page-section-head push-list-head push-list-head--with-actions">
           <h3 className="subsection-title page-section-title">Theo từng lần push</h3>
           {!loading && perPushRows.length > 0 ? (
@@ -290,16 +414,22 @@ export function TeamDetail({
       ) : null}
       {loading && (
         <div aria-busy="true">
-          <Skeleton className="skeleton-line" style={{ height: 120, marginBottom: 12 }} />
-          <Skeleton className="skeleton-line" style={{ height: 120, marginBottom: 12 }} />
+          {homeSidebar ? (
+            <Skeleton className="skeleton-line" style={{ height: 100, marginBottom: 8 }} />
+          ) : (
+            <>
+              <Skeleton className="skeleton-line" style={{ height: 120, marginBottom: 12 }} />
+              <Skeleton className="skeleton-line" style={{ height: 120, marginBottom: 12 }} />
+            </>
+          )}
         </div>
       )}
       {!teamId && !loading && <p className="state">Chưa chọn đội.</p>}
       {teamId && !loading && rows.length === 0 && <p className="state">Đội này chưa có bản ghi review.</p>}
-      {teamId && !loading && rows.length > 0 && perPushRows.length === 0 && (
+      {teamId && !loading && !homeSidebar && rows.length > 0 && perPushRows.length === 0 && (
         <p className="state state--muted">Chưa có bản ghi review theo từng push (chỉ có tổng hợp đội hoặc dữ liệu khác).</p>
       )}
-      {teamId && !loading && perPushRows.length > 0 && (
+      {teamId && !loading && !homeSidebar && perPushRows.length > 0 && (
         <PaginationBar
           page={pushPage}
           pageCount={pushPageCount}
@@ -310,6 +440,7 @@ export function TeamDetail({
         />
       )}
       {!loading &&
+        !homeSidebar &&
         paginatedPushRows.map((item) => {
           const cardKey = pushCardKey(item);
           const detailOpen = isPushDetailExpanded(cardKey);
@@ -393,7 +524,7 @@ export function TeamDetail({
               >
                 <ProjectToolsPanels projectAbout={op?.project_about} toolsBullets={op?.tools_plain_bullets} />
                 <div className="detail-panels-region">
-                  {renderExtendedLlmSections(item.structured_output, { scope: "push" })}
+                  {renderExtendedLlmSections(item.structured_output, { scope: "push", panelIdSuffix: cardKey })}
                   {renderHistoricalSynthesis(item.structured_output)}
                   <details className="json-details">
                     <summary>Structured output — push này (JSON)</summary>
@@ -407,24 +538,6 @@ export function TeamDetail({
     </section>
   );
 }
-
-const INVENTORY_LABELS: Array<{ key: keyof InventoryExhaustive; label: string }> = [
-  { key: "llm_models_and_apis", label: "LLM / API" },
-  { key: "frameworks_and_runtimes", label: "Framework & runtime" },
-  { key: "vector_databases", label: "Vector DB" },
-  { key: "agent_orchestration", label: "Agent / orchestration" },
-  { key: "third_party_integrations", label: "Tích hợp khác" },
-];
-
-const ASSESSMENT_LABELS: Array<{ key: keyof AssessmentBlock; label: string }> = [
-  { key: "advantages", label: "Ưu điểm" },
-  { key: "disadvantages", label: "Khuyết điểm" },
-  { key: "improvement_areas", label: "Điểm cần cải thiện" },
-  { key: "context_and_fit", label: "Ngữ cảnh & đề bài" },
-  { key: "source_structure", label: "Cấu trúc source" },
-  { key: "completeness", label: "Độ hoàn thiện" },
-  { key: "security", label: "Bảo mật" },
-];
 
 function renderCollapsibleRagAndAssessment(
   structuredOutput: Record<string, unknown> | null,
@@ -489,7 +602,7 @@ function renderRagMaturityPanel(
 
   return (
     <div className="criteria-box rag-maturity-panel" aria-label="Mức RAG và tính năng phát hiện">
-      <SectionLabel icon="◎">RAG — mức độ và tính năng (từ LLM)</SectionLabel>
+      <SectionLabel icon="△">RAG — mức độ và tính năng (từ LLM)</SectionLabel>
       {levelLine ? (
         <p className="rag-maturity-panel__level">
           <span className="rag-maturity-panel__label">Mức</span> {levelLine}
@@ -553,166 +666,126 @@ function CopyTextButton({ text, children }: { text: string; children: ReactNode 
   );
 }
 
-function renderExtendedLlmSections(
-  structuredOutput: Record<string, unknown> | null,
-  options?: { scope?: "push" | "team" }
-) {
-  const scope = options?.scope ?? "push";
-  const inv = extractInventoryExhaustive(structuredOutput);
-  const aiTests = extractSuggestedTestCases(structuredOutput);
-  const questions = extractSuggestedQuestionsForTeam(structuredOutput);
-  const promptHint = extractPromptRefinement(structuredOutput);
-
-  const hasInventory =
-    inv &&
-    INVENTORY_LABELS.some(({ key }) => Array.isArray(inv[key]) && (inv[key] as string[]).length > 0);
-  const hasAiTests = Boolean(aiTests && aiTests.length > 0);
-  const skeletonTests = !hasAiTests && hasInventory && inv ? buildSkeletonTestCasesFromInventory(inv) : [];
-  const hasSkeletonTests = skeletonTests.length > 0;
-  const hasQuestions = Boolean(questions && questions.length > 0);
-
-  if (!hasInventory && !hasAiTests && !hasSkeletonTests && !hasQuestions && !promptHint) return null;
-
-  const copyTestBundle = [...(aiTests ?? []), ...skeletonTests].join("\n\n---\n\n");
-  const hasCoreBlock = Boolean(hasInventory && inv);
-  const hasDualPanels = (hasAiTests || hasSkeletonTests) && hasQuestions;
-
-  const invTitle =
-    scope === "team" ? "Danh mục công nghệ (toàn đội, gộp từ lịch sử)" : "Danh mục công nghệ (liệt kê đầy đủ)";
+function renderTestCasesPanel(ctx: ExtendedLlmContext, scope: "push" | "team", panelIdSuffix: string) {
+  if (!ctx.hasAiTests && !ctx.hasSkeletonTests) return null;
+  const aiTests = ctx.aiTests;
+  const skeletonTests = ctx.skeletonTests;
   const testSubtitle =
     scope === "team"
       ? "Kịch bản end-to-end, demo, hồi quy — theo bản tổng hợp đội mới nhất."
       : "Theo stack đội; có thể bổ sung khung khi AI chưa trả đủ.";
+  const testsHeadingId = `review-panel-tests-heading-${panelIdSuffix}`;
+  return (
+    <section className="review-panel review-panel--tests" aria-labelledby={testsHeadingId}>
+      <header className="review-panel__head">
+        <div>
+          <h4 id={testsHeadingId} className="review-panel__title">
+            <span className="review-panel__icon" aria-hidden>
+              ✓
+            </span>
+            {scope === "team" ? "Test case — toàn hệ thống" : "Test case gợi ý"}
+          </h4>
+          <p className="review-panel__subtitle">{testSubtitle}</p>
+        </div>
+        {ctx.copyTestBundle.trim() ? (
+          <CopyTextButton text={ctx.copyTestBundle}>Sao chép tất cả</CopyTextButton>
+        ) : null}
+      </header>
+      <div className="review-panel__body">
+        {ctx.hasAiTests && aiTests ? (
+          <div className="review-panel__group">
+            <span className="review-panel__group-label">Từ phân tích AI</span>
+            <ul className="test-case-cards">
+              {aiTests.map((t, i) => (
+                <li key={`ai-${i}`} className="test-case-card">
+                  <span className="test-case-card__badge">TC {String(i + 1).padStart(2, "0")}</span>
+                  <div className="test-case-card__body">
+                    <ProsePre>{t}</ProsePre>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {ctx.hasSkeletonTests ? (
+          <div className="review-panel__group">
+            <span className="review-panel__group-label review-panel__group-label--muted">Khung gợi ý (theo danh mục)</span>
+            <ul className="test-case-cards test-case-cards--skeleton">
+              {skeletonTests.map((t, i) => (
+                <li key={`sk-${i}`} className="test-case-card test-case-card--skeleton">
+                  <span className="test-case-card__badge test-case-card__badge--muted">+{i + 1}</span>
+                  <div className="test-case-card__body">
+                    <ProsePre>{t}</ProsePre>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function renderQuestionsPanel(ctx: ExtendedLlmContext, scope: "push" | "team", panelIdSuffix: string) {
+  if (!ctx.hasQuestions || !ctx.questions) return null;
+  const questions = ctx.questions;
   const questionsSubtitle =
     scope === "team"
       ? "Câu hỏi phỏng vấn / Q&A cấp đội (theo bản tổng hợp mới nhất)."
       : "Gợi ý khi demo hoặc chấm.";
+  const questionsHeadingId = `review-panel-questions-heading-${panelIdSuffix}`;
+  return (
+    <section className="review-panel review-panel--questions" aria-labelledby={questionsHeadingId}>
+      <header className="review-panel__head">
+        <div>
+          <h4 id={questionsHeadingId} className="review-panel__title">
+            <span className="review-panel__icon review-panel__icon--questions" aria-hidden>
+              ?
+            </span>
+            {scope === "team" ? "Câu hỏi — cấp đội / toàn hệ thống" : "Câu hỏi gợi ý cho đội"}
+          </h4>
+          <p className="review-panel__subtitle">{questionsSubtitle}</p>
+        </div>
+        <CopyTextButton text={questions.join("\n\n")}>Sao chép tất cả</CopyTextButton>
+      </header>
+      <ul className="question-cards">
+        {questions.map((q, i) => (
+          <li key={i} className="question-card">
+            <span className="question-card__badge">Q{i + 1}</span>
+            <div className="question-card__body">
+              <ProsePre>{q}</ProsePre>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function renderExtendedLlmSections(
+  structuredOutput: Record<string, unknown> | null,
+  options?: { scope?: "push" | "team"; panelIdSuffix?: string }
+) {
+  const scope = options?.scope ?? "push";
+  const panelIdSuffix = options?.panelIdSuffix ?? "default";
+  const ctx = getExtendedLlmContext(structuredOutput);
+  if (!ctx.hasInventory && !ctx.hasAiTests && !ctx.hasSkeletonTests && !ctx.hasQuestions && !ctx.promptHint) {
+    return null;
+  }
+
+  const hasDualPanels = (ctx.hasAiTests || ctx.hasSkeletonTests) && ctx.hasQuestions;
 
   return (
     <div className="llm-review-sections">
-      {hasCoreBlock ? (
-        <div className="criteria-box llm-extended-block">
-          {hasInventory && inv ? (
-            <div className="llm-section-chunk">
-              <SectionLabel icon="◇">{invTitle}</SectionLabel>
-              <div className="inventory-grid">
-                {INVENTORY_LABELS.map(({ key, label }) => {
-                  const arr = (inv[key] as string[] | undefined) ?? [];
-                  if (!arr.length) return null;
-                  return (
-                    <div key={key} className="inventory-category">
-                      <span className="inventory-cat-label">{label}</span>
-                      <ul className="inventory-tags">
-                        {arr.map((t) => (
-                          <li key={t}>{t}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {(hasAiTests || hasSkeletonTests || hasQuestions) && (
+      {renderInventorySectionFromCtx(ctx, scope)}
+      {(ctx.hasAiTests || ctx.hasSkeletonTests || ctx.hasQuestions) && (
         <div className={`review-panels-grid ${hasDualPanels ? "review-panels-grid--split" : ""}`}>
-          {(hasAiTests || hasSkeletonTests) && (
-            <section
-              className="review-panel review-panel--tests"
-              aria-labelledby="review-panel-tests-heading"
-            >
-              <header className="review-panel__head">
-                <div>
-                  <h4 id="review-panel-tests-heading" className="review-panel__title">
-                    <span className="review-panel__icon" aria-hidden>
-                      ✓
-                    </span>
-                    {scope === "team" ? "Test case — toàn hệ thống" : "Test case gợi ý"}
-                  </h4>
-                  <p className="review-panel__subtitle">{testSubtitle}</p>
-                </div>
-                {copyTestBundle.trim() ? (
-                  <CopyTextButton text={copyTestBundle}>Sao chép tất cả</CopyTextButton>
-                ) : null}
-              </header>
-              <div className="review-panel__body">
-                {hasAiTests && aiTests ? (
-                  <div className="review-panel__group">
-                    <span className="review-panel__group-label">Từ phân tích AI</span>
-                    <ul className="test-case-cards">
-                      {aiTests.map((t, i) => (
-                        <li key={`ai-${i}`} className="test-case-card">
-                          <span className="test-case-card__badge">TC {String(i + 1).padStart(2, "0")}</span>
-                          <div className="test-case-card__body">
-                            <ProsePre>{t}</ProsePre>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                {hasSkeletonTests ? (
-                  <div className="review-panel__group">
-                    <span className="review-panel__group-label review-panel__group-label--muted">Khung gợi ý (theo danh mục)</span>
-                    <ul className="test-case-cards test-case-cards--skeleton">
-                      {skeletonTests.map((t, i) => (
-                        <li key={`sk-${i}`} className="test-case-card test-case-card--skeleton">
-                          <span className="test-case-card__badge test-case-card__badge--muted">+{i + 1}</span>
-                          <div className="test-case-card__body">
-                            <ProsePre>{t}</ProsePre>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            </section>
-          )}
-
-          {hasQuestions && questions ? (
-            <section
-              className="review-panel review-panel--questions"
-              aria-labelledby="review-panel-questions-heading"
-            >
-              <header className="review-panel__head">
-                <div>
-                  <h4 id="review-panel-questions-heading" className="review-panel__title">
-                    <span className="review-panel__icon review-panel__icon--questions" aria-hidden>
-                      ?
-                    </span>
-                    {scope === "team" ? "Câu hỏi — cấp đội / toàn hệ thống" : "Câu hỏi gợi ý cho đội"}
-                  </h4>
-                  <p className="review-panel__subtitle">{questionsSubtitle}</p>
-                </div>
-                <CopyTextButton text={questions.join("\n\n")}>Sao chép tất cả</CopyTextButton>
-              </header>
-              <ul className="question-cards">
-                {questions.map((q, i) => (
-                  <li key={i} className="question-card">
-                    <span className="question-card__badge">Q{i + 1}</span>
-                    <div className="question-card__body">
-                      <ProsePre>{q}</ProsePre>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
+          {(ctx.hasAiTests || ctx.hasSkeletonTests) && renderTestCasesPanel(ctx, scope, panelIdSuffix)}
+          {ctx.hasQuestions && renderQuestionsPanel(ctx, scope, panelIdSuffix)}
         </div>
       )}
-
-      {promptHint ? (
-        <div className="criteria-box prompt-refine-panel">
-          <SectionLabel icon="→">Gợi ý tối ưu prompt — nên chỉnh gì</SectionLabel>
-          <p className="prompt-refine-panel__hint">
-            Chỉ liệt kê hạng mục cần tối ưu (LLM được hướng dẫn trả gạch đầu dòng ngắn); tránh sao chép cả prompt dài.
-          </p>
-          <ProsePre>{promptHint}</ProsePre>
-        </div>
-      ) : null}
+      {renderPromptRefinementFromCtx(ctx)}
     </div>
   );
 }
@@ -728,7 +801,7 @@ function renderHistoricalSynthesis(structuredOutput: Record<string, unknown> | n
     <div className="criteria-box">
       {typeof hist === "string" && hist ? (
         <div style={{ marginBottom: evo ? 14 : 0 }}>
-          <SectionLabel icon="◎">Tổng hợp lịch sử</SectionLabel>
+          <SectionLabel icon="▣">Tổng hợp lịch sử</SectionLabel>
           <ProsePre>{hist}</ProsePre>
         </div>
       ) : null}
