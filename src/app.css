@@ -1160,6 +1160,12 @@ body {
   margin-top: 12px;
 }
 
+.smb-scale-advisory-panel__row--identity {
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed var(--border);
+}
+
 .criteria-box {
   margin-top: 14px;
   padding: 14px 16px;

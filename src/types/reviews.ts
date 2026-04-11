@@ -87,6 +87,8 @@ export function extractCriteriaComments(structuredOutput: Record<string, unknown
 
 /** Gợi ý cải tiến cấp đội (aggregate): SMB, quy mô, throughput — từ LLM `smb_scale_advisory`. */
 export type SmbScaleAdvisory = {
+  /** B1: chỉ mô tả hệ thống từ bằng chứng — không khuyến nghị cải tiến (aggregate LLM). */
+  system_identity_recap?: string;
   summary?: string;
   tech_and_architecture?: string;
   cost_for_smb?: string;
@@ -123,6 +125,7 @@ export function extractSmbScaleAdvisory(structuredOutput: Record<string, unknown
 }
 
 const SMB_ADVISORY_FIELD_KEYS: (keyof SmbScaleAdvisory)[] = [
+  "system_identity_recap",
   "summary",
   "tech_and_architecture",
   "cost_for_smb",

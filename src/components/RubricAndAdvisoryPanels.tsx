@@ -58,7 +58,8 @@ export function TeamAggregateCriteriaSections({
 }
 
 const SMB_ADVISORY_ROWS: Array<{ field: keyof SmbScaleAdvisory; label: string }> = [
-  { field: "summary", label: "Tóm tắt" },
+  { field: "system_identity_recap", label: "Hệ thống — nhận diện (trước khi cải tiến)" },
+  { field: "summary", label: "Khoảng cách & ưu tiên (tóm tắt)" },
   { field: "tech_and_architecture", label: "Công nghệ & kiến trúc" },
   { field: "cost_for_smb", label: "Chi phí & phù hợp SMB" },
   { field: "throughput_and_reliability", label: "Throughput & độ tin cậy" },
@@ -86,7 +87,10 @@ export function SmbScaleAdvisoryPanel({
     <div className="criteria-box smb-scale-advisory-panel" aria-label="Gợi ý cải tiến SMB và quy mô">
       <SectionLabel icon="◇">Gợi ý cải tiến (SMB &amp; quy mô)</SectionLabel>
       {rows.map(({ field, label, text }) => (
-        <div key={field} className="smb-scale-advisory-panel__row">
+        <div
+          key={field}
+          className={`smb-scale-advisory-panel__row${field === "system_identity_recap" ? " smb-scale-advisory-panel__row--identity" : ""}`}
+        >
           <span className="criteria-item-label">{label}</span>
           <ProsePre>{text}</ProsePre>
         </div>
