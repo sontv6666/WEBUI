@@ -215,13 +215,33 @@ export default function App() {
           path="/teams"
           element={
             <section className="panel page-panel">
-              <div className="panel-head">
+              <div className="team-header">
                 <h2 className="panel-title">Bảng đội</h2>
+                <select
+                  value={
+                    teamOptions.some((t) => t.teamId === selectedTeam)
+                      ? selectedTeam
+                      : teamOptions[0]?.teamId ?? ""
+                  }
+                  onChange={(e) => openTeamDetail(e.target.value)}
+                  disabled={!teamOptions.length}
+                  aria-label="Chọn đội để xem commit và chi tiết"
+                >
+                  {!teamOptions.length ? (
+                    <option value="">Đang tải danh sách đội…</option>
+                  ) : (
+                    teamOptions.map((team) => (
+                      <option key={team.teamId} value={team.teamId}>
+                        {team.repoName ? `${team.teamId} · ${team.repoName}` : team.teamId}
+                      </option>
+                    ))
+                  )}
+                </select>
               </div>
               <p className="sub page-hero" style={{ marginTop: 0 }}>
-                <strong>Bảng đội cho giám khảo</strong> — chọn đội để xem tổng quan hệ thống, từng push, công nghệ đang dùng, tiêu
-                chí R1, test case và câu hỏi gợi ý. <strong>Nhấp một lần vào thẻ đội</strong> để mở trang chi tiết. Phần{" "}
-                <em>Các lần push đã nhận xét</em> bên trong thẻ chỉ mở/đóng danh sách — không chuyển trang.
+                <strong>Bảng đội cho giám khảo</strong> — dropdown phía trên để mở nhanh trang chi tiết đội (commit, R1, test case…).
+                Hoặc <strong>nhấp một lần vào thẻ đội</strong> bên dưới. Phần <em>Các lần push đã nhận xét</em> trong thẻ chỉ mở/đóng
+                danh sách — không chuyển trang.
               </p>
               <TeamsTable
                 rows={latestTeams}
