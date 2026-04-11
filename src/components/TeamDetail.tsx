@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { AssessmentBlock, InventoryExhaustive, ReviewItem } from "../types/reviews";
+import type { AssessmentBlock, CriteriaComments, InventoryExhaustive, ReviewItem } from "../types/reviews";
 import {
   buildSkeletonTestCasesFromInventory,
   extractAssessment,
@@ -696,7 +696,7 @@ function renderHistoricalSynthesis(structuredOutput: Record<string, unknown> | n
   );
 }
 
-const RUBRIC_LABELS: Array<{ key: "R1_01" | "R1_02" | "R1_03" | "R1_04" | "R1_05"; label: string }> = [
+const RUBRIC_R1_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
   { key: "R1_01", label: "R1_01 · Domain fit" },
   { key: "R1_02", label: "R1_02 · Data pipeline" },
   { key: "R1_03", label: "R1_03 · Retrieval" },
@@ -704,17 +704,30 @@ const RUBRIC_LABELS: Array<{ key: "R1_01" | "R1_02" | "R1_03" | "R1_04" | "R1_05
   { key: "R1_05", label: "R1_05 · Slide & trình bày" },
 ];
 
+const RUBRIC_R2_LABELS: Array<{ key: keyof CriteriaComments; label: string }> = [
+  { key: "R2_01", label: "R2_01 · Tư duy Agent & multi-hop (25%)" },
+  { key: "R2_02", label: "R2_02 · Quản lý tài nguyên model (25%)" },
+  { key: "R2_03", label: "R2_03 · Thực tế & tối ưu vận hành (15%)" },
+  { key: "R2_04", label: "R2_04 · Mở rộng & sáng tạo (15%)" },
+  { key: "R2_05", label: "R2_05 · Phản biện hội đồng (20%)" },
+];
+
 function renderCriteriaCommentsPerPush(structuredOutput: Record<string, unknown> | null) {
   const criteria = extractCriteriaComments(structuredOutput);
   if (!criteria) return null;
 
-  const hasAny = RUBRIC_LABELS.some(({ key }) => Boolean(criteria[key]));
-  if (!hasAny) return null;
+  const hasR1 = RUBRIC_R1_LABELS.some(({ key }) => Boolean(criteria[key]));
+  const hasR2 = RUBRIC_R2_LABELS.some(({ key }) => Boolean(criteria[key]));
+  if (!hasR1 && !hasR2) return null;
 
-  return (
-    <div className="criteria-box criteria-per-push">
-      <span className="criteria-title">Tiêu chí (R1) — áp dụng cho push này</span>
-      {RUBRIC_LABELS.map(({ key, label }) =>
+  const renderGroup = (
+    title: string,
+    labels: typeof RUBRIC_R1_LABELS,
+    extraClass?: string
+  ) => (
+    <div className={`criteria-box criteria-per-push${extraClass ? ` ${extraClass}` : ""}`}>
+      <span className="criteria-title">{title}</span>
+      {labels.map(({ key, label }) =>
         criteria[key] ? (
           <div key={key} style={{ marginTop: 12 }}>
             <span className="criteria-item-label">{label}</span>
@@ -722,6 +735,13 @@ function renderCriteriaCommentsPerPush(structuredOutput: Record<string, unknown>
           </div>
         ) : null
       )}
+    </div>
+  );
+
+  return (
+    <div className="criteria-rubric-stack">
+      {hasR1 ? renderGroup("Tiêu chí R1 — push này", RUBRIC_R1_LABELS) : null}
+      {hasR2 ? renderGroup("Tiêu chí R2 — push này", RUBRIC_R2_LABELS, "criteria-per-push--r2") : null}
     </div>
   );
 }

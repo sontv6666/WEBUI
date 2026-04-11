@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReviewItem, TeamLatestReview } from "../types/reviews";
+import type { CriteriaComments, ReviewItem, TeamLatestReview } from "../types/reviews";
 import {
   extractBatchReviewMeta,
   extractCriteriaComments,
@@ -198,29 +198,59 @@ export function TeamsTable({
   );
 }
 
+const R1_TABLE_LABELS: Array<{ key: keyof CriteriaComments; short: string }> = [
+  { key: "R1_01", short: "R1_01 · Domain fit" },
+  { key: "R1_02", short: "R1_02 · Data pipeline" },
+  { key: "R1_03", short: "R1_03 · Retrieval" },
+  { key: "R1_04", short: "R1_04 · Intent & prompting" },
+  { key: "R1_05", short: "R1_05 · Slide & trình bày" },
+];
+
+const R2_TABLE_LABELS: Array<{ key: keyof CriteriaComments; short: string }> = [
+  { key: "R2_01", short: "R2_01 · Agent & multi-hop (25%)" },
+  { key: "R2_02", short: "R2_02 · Tài nguyên model (25%)" },
+  { key: "R2_03", short: "R2_03 · Thực tế vận hành (15%)" },
+  { key: "R2_04", short: "R2_04 · Mở rộng & sáng tạo (15%)" },
+  { key: "R2_05", short: "R2_05 · Phản biện BGK (20%)" },
+];
+
 function CriteriaCommentsBlock({ structuredOutput }: { structuredOutput: Record<string, unknown> | null }) {
   const criteria = extractCriteriaComments(structuredOutput);
   if (!criteria) return null;
 
-  const lines = [
-    ["R1_01", criteria.R1_01],
-    ["R1_02", criteria.R1_02],
-    ["R1_03", criteria.R1_03],
-    ["R1_04", criteria.R1_04],
-    ["R1_05", criteria.R1_05],
-  ].filter(([, value]) => Boolean(value));
+  const r1Lines = R1_TABLE_LABELS.map(({ key, short }) => [short, criteria[key] as string | undefined] as const).filter(
+    ([, value]) => Boolean(value)
+  );
+  const r2Lines = R2_TABLE_LABELS.map(({ key, short }) => [short, criteria[key] as string | undefined] as const).filter(
+    ([, value]) => Boolean(value)
+  );
 
-  if (lines.length === 0) return null;
+  if (r1Lines.length === 0 && r2Lines.length === 0) return null;
 
   return (
-    <div className="criteria-box criteria-per-push" style={{ marginTop: 12 }}>
-      <SectionLabel icon="¶">Tiêu chí (R1) — push này</SectionLabel>
-      {lines.map(([key, value]) => (
-        <div key={key} style={{ marginTop: 8 }}>
-          <span className="criteria-item-label">{key}</span>
-          <ProsePre>{value as string}</ProsePre>
+    <div className="criteria-rubric-stack" style={{ marginTop: 12 }}>
+      {r1Lines.length > 0 ? (
+        <div className="criteria-box criteria-per-push">
+          <SectionLabel icon="¶">Tiêu chí R1 — push này</SectionLabel>
+          {r1Lines.map(([label, value]) => (
+            <div key={label} style={{ marginTop: 8 }}>
+              <span className="criteria-item-label">{label}</span>
+              <ProsePre>{value}</ProsePre>
+            </div>
+          ))}
         </div>
-      ))}
+      ) : null}
+      {r2Lines.length > 0 ? (
+        <div className="criteria-box criteria-per-push criteria-per-push--r2">
+          <SectionLabel icon="¶">Tiêu chí R2 — push này</SectionLabel>
+          {r2Lines.map(([label, value]) => (
+            <div key={label} style={{ marginTop: 8 }}>
+              <span className="criteria-item-label">{label}</span>
+              <ProsePre>{value}</ProsePre>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

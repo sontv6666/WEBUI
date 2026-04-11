@@ -46,6 +46,11 @@ export type CriteriaComments = {
   R1_03?: string;
   R1_04?: string;
   R1_05?: string;
+  R2_01?: string;
+  R2_02?: string;
+  R2_03?: string;
+  R2_04?: string;
+  R2_05?: string;
 };
 
 export function extractCriteriaComments(structuredOutput: Record<string, unknown> | null): CriteriaComments | null {
